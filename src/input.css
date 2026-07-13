@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+  input[type='date'] {
+    color-scheme: light dark;
+  }
+}
+
+@layer components {
+  /* Shared building blocks referenced from JS-generated markup. */
+  .card {
+    @apply bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800;
+  }
+  .btn-primary {
+    @apply min-h-[44px] px-5 rounded-xl bg-accent text-white font-medium hover:bg-accent-dark transition-colors duration-150 inline-flex items-center justify-center;
+  }
+  .btn-secondary {
+    @apply min-h-[44px] px-5 rounded-xl bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-200 font-medium hover:bg-stone-200 dark:hover:bg-stone-700 transition-colors duration-150 inline-flex items-center justify-center;
+  }
+  .btn-ghost {
+    @apply min-h-[44px] px-4 rounded-xl text-stone-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors duration-150 inline-flex items-center justify-center;
+  }
+  .btn-choice {
+    @apply w-full min-h-[56px] px-5 rounded-2xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-left font-medium hover:border-accent hover:bg-accent-soft/40 dark:hover:bg-stone-800 transition-colors duration-150 flex items-center gap-3;
+  }
+  .chip {
+    @apply inline-flex items-center min-h-[36px] px-3.5 rounded-full text-sm border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:border-accent transition-colors duration-150;
+  }
+  .chip-active {
+    @apply bg-accent text-white border-accent hover:border-accent dark:border-accent;
+  }
+  .field {
+    @apply w-full min-h-[44px] px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 outline-none focus:border-accent transition-colors duration-150;
+  }
+  .nav-link {
+    @apply flex items-center gap-3 min-h-[44px] px-3 rounded-xl text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-900 transition-colors duration-150;
+  }
+  .nav-link-active {
+    @apply bg-stone-100 dark:bg-stone-900 text-stone-900 dark:text-stone-100 font-medium;
+  }
+}

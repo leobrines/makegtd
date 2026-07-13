@@ -1,0 +1,13 @@
+{
+  "name": "makegtd",
+  "version": "1.0.0",
+  "description": "Installable, offline-first GTD web app (Spanish UI)",
+  "private": true,
+  "scripts": {
+    "build:css": "tailwindcss -i src/input.css -o css/styles.css --minify",
+    "watch:css": "tailwindcss -i src/input.css -o css/styles.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.17"
+  }
+}
