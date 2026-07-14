@@ -17,6 +17,7 @@
     '/algundia': function () { return views.renderSomeday(); },
     '/referencia': function () { return views.renderReference(); },
     '/revision': function () { return global.GTD.review.render(); },
+    '/papelera': function () { return views.renderTrash(); },
     '/ajustes': function () { return views.renderSettings(); },
   };
 
@@ -34,6 +35,7 @@
 
   var NAV_FOOTER = [
     { path: '/revision', icon: '🪞', label: 'Revisión semanal', badge: 'review' },
+    { path: '/papelera', icon: '🗑️', label: 'Papelera' },
     { path: '/ajustes', icon: '⚙️', label: 'Ajustes' },
   ];
 
@@ -51,6 +53,7 @@
     { path: '/algundia', icon: '🌙', label: 'Algún día' },
     { path: '/referencia', icon: '📚', label: 'Referencia' },
     { path: '/revision', icon: '🪞', label: 'Revisión semanal', badge: 'review' },
+    { path: '/papelera', icon: '🗑️', label: 'Papelera' },
     { path: '/ajustes', icon: '⚙️', label: 'Ajustes' },
   ];
 
@@ -154,6 +157,7 @@
     // Route-change housekeeping.
     if (path !== lastPath) {
       views.collapseEditor();
+      if (lastPath === '/procesar') global.GTD.process.onRouteLeave();
       if (path === '/revision' && global.GTD.review.isFinished()) global.GTD.review.reset();
       if (lastPath !== null) $('#view').scrollTop && window.scrollTo(0, 0);
       lastPath = path;

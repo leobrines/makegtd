@@ -11,12 +11,58 @@
   var store = global.GTD.store;
   var model = global.GTD.model;
 
-  // actionable | not-actionable | incubate | steps | two-minutes | doing-now |
-  // project | project-action | who | delegate | when | schedule | next
+  // actionable | not-actionable | incubate | reference | steps | two-minutes |
+  // doing-now | project | project-action | who | delegate | when | schedule | next
   var step = 'actionable';
   var itemId = null;
   // Multi-step path: project and first action being defined, committed at the end.
   var pending = null; // { projectName, projectOutcome, actionTitle }
+
+  // Browser-history integration: every forward step pushes a history entry so the
+  // hardware/browser back button (Android) steps back through the wizard exactly
+  // like the in-app "Volver atrás" button — both go through history.back().
+  var HISTORY_SESSION = 'pz-' + Date.now().toString(36) + Math.random().toString(36).slice(2);
+  var historyDepth = 0; // wizard entries pushed above the base #/procesar entry
+  var stackAlive = false; // false once the user routes away: those entries are stale
+  var unwinding = false; // swallow the popstate fired by our own history.go() cleanup
+
+  function currentPath() {
+    var hash = global.location.hash.replace(/^#/, '');
+    return hash || '/hoy';
+  }
+
+  // Forward step: push a history entry tagged with enough context to restore it.
+  function go(nextStep) {
+    step = nextStep;
+    historyDepth += 1;
+    stackAlive = true;
+    global.history.pushState(
+      { pzSession: HISTORY_SESSION, pzItem: itemId, pzStep: nextStep, pzDepth: historyDepth },
+      ''
+    );
+    global.GTD.app.refresh();
+  }
+
+  // Fallback back-step used when our history entries are no longer on top
+  // (the user routed away mid-wizard and came back via the navigation).
+  function stepBack() {
+    var back = {
+      'not-actionable': 'actionable',
+      incubate: 'not-actionable',
+      reference: 'not-actionable',
+      steps: 'actionable',
+      'two-minutes': 'steps',
+      'doing-now': 'two-minutes',
+      project: 'steps',
+      'project-action': 'project',
+      delegate: 'who',
+      when: 'who',
+      schedule: 'when',
+      next: 'when',
+    };
+    step = step === 'who' ? (pending ? 'project-action' : 'two-minutes') : back[step] || 'actionable';
+    global.GTD.app.refresh();
+  }
 
   function esc(text) {
     return global.GTD.views.esc(text);
@@ -39,6 +85,14 @@
     itemId = null;
     step = 'actionable';
     pending = null;
+    // Drop the wizard's history entries so the back button doesn't replay the
+    // steps of an item that no longer exists.
+    if (stackAlive && historyDepth > 0) {
+      unwinding = true;
+      global.history.go(-historyDepth);
+    }
+    historyDepth = 0;
+    stackAlive = false;
     global.GTD.app.toast(message);
     global.GTD.app.refresh();
   }
@@ -92,7 +146,9 @@
     if (pending) {
       var project = store.addProject({ name: pending.projectName, outcome: pending.projectOutcome });
       store.addItem(Object.assign({ title: pending.actionTitle, projectId: project.id }, fields));
-      store.removeItem(itemId);
+      // The inbox item was transformed into the project, not deleted by the
+      // user, so it skips the trash (a copy there would be a confusing duplicate).
+      store.destroyItem(itemId);
     } else {
       store.updateItem(itemId, Object.assign({ projectId: selectedProjectId(item) }, fields));
     }
@@ -277,11 +333,6 @@
   function bind() {
     var $view = $('#view');
 
-    function go(nextStep) {
-      step = nextStep;
-      global.GTD.app.refresh();
-    }
-
     $view.on('click', '[data-action="pz-yes-actionable"]', function () { go('steps'); });
     $view.on('click', '[data-action="pz-no-actionable"]', function () { go('not-actionable'); });
 
@@ -305,30 +356,43 @@
     });
 
     $view.on('click', '[data-action="pz-back"]', function () {
-      var back = {
-        'not-actionable': 'actionable',
-        incubate: 'not-actionable',
-        reference: 'not-actionable',
-        steps: 'actionable',
-        'two-minutes': 'steps',
-        'doing-now': 'two-minutes',
-        project: 'steps',
-        'project-action': 'project',
-        delegate: 'who',
-        when: 'who',
-        schedule: 'when',
-        next: 'when',
-      };
-      if (step === 'who') {
-        go(pending ? 'project-action' : 'two-minutes');
+      // Same code path as the hardware back button: pop the history entry and
+      // let the popstate handler restore the previous step.
+      if (stackAlive && historyDepth > 0) global.history.back();
+      else stepBack();
+    });
+
+    // Hardware/browser back (and forward) while clarifying: restore the step
+    // recorded in the history entry we land on.
+    $(global).on('popstate', function (e) {
+      if (unwinding) {
+        unwinding = false;
         return;
       }
-      go(back[step] || 'actionable');
+      var state = e.originalEvent.state;
+      if (state && state.pzSession === HISTORY_SESSION && itemId && state.pzItem === itemId) {
+        step = state.pzStep;
+        historyDepth = state.pzDepth;
+        stackAlive = true;
+        global.GTD.app.refresh();
+        return;
+      }
+      // Popped back onto the base #/procesar entry: show the start of the
+      // wizard. Guard on stackAlive because Chrome also fires popstate when a
+      // nav link *pushes* #/procesar, and that must keep the current step.
+      if (currentPath() === '/procesar' && stackAlive) {
+        historyDepth = 0;
+        if (step !== 'actionable') {
+          step = 'actionable';
+          pending = null;
+          global.GTD.app.refresh();
+        }
+      }
     });
 
     $view.on('click', '[data-action="pz-trash"]', function () {
       store.removeItem(itemId);
-      finishItem('Eliminada. Una cosa menos.');
+      finishItem('A la papelera. Una cosa menos.');
     });
 
     $view.on('click', '[data-action="pz-someday"]', function () { go('incubate'); });
@@ -465,6 +529,14 @@
       itemId = null;
       step = 'actionable';
       pending = null;
+      historyDepth = 0;
+      stackAlive = false;
+    },
+    // Called by the router when the user leaves #/procesar: the wizard entries
+    // are no longer on top of the history stack, so stop popping them.
+    onRouteLeave: function () {
+      historyDepth = 0;
+      stackAlive = false;
     },
   };
 })(window, jQuery);
