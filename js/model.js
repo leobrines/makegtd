@@ -246,18 +246,35 @@
     return store.getSettings().captureShortcutEnabled !== false;
   }
 
-  // Engage criteria (workflow map four-criteria model): user-editable value
-  // lists. An empty list hides that field across the app.
+  // Engage criteria — the four-criteria model for choosing actions in the
+  // moment (GTD book, "Engaging" chapter): context, time available, energy
+  // available, priority. Context is its own first-class field; these are the
+  // other three, as user-editable value lists.
+  //
+  // Whether one criterion is on. When off, the field disappears from the
+  // whole UI but its value list and the values stored on items are kept, so
+  // re-enabling brings everything back untouched (same idea as
+  // contextsEnabled).
+  function criterionEnabled(key) {
+    return store.getSettings()[key + 'Enabled'] !== false;
+  }
+
+  // Accessors return an empty list while the criterion is off, which hides
+  // the field everywhere (every render site treats an empty list as "off").
+  function criterionValues(key) {
+    return criterionEnabled(key) ? store.getCriterionValues(key) : [];
+  }
+
   function timeEstimates() {
-    return store.getCriterionValues('timeEstimates');
+    return criterionValues('timeEstimates');
   }
 
   function energyLevels() {
-    return store.getCriterionValues('energyLevels');
+    return criterionValues('energyLevels');
   }
 
   function priorities() {
-    return store.getCriterionValues('priorities');
+    return criterionValues('priorities');
   }
 
   // Entries of one horizon level (2-5), oldest first (stable, list-like order).
@@ -444,6 +461,7 @@
     referenceEnabled: referenceEnabled,
     gcalEnabled: gcalEnabled,
     captureShortcutEnabled: captureShortcutEnabled,
+    criterionEnabled: criterionEnabled,
     timeEstimates: timeEstimates,
     energyLevels: energyLevels,
     priorities: priorities,
