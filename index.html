@@ -42,9 +42,20 @@
     <div id="capture-overlay" class="fixed inset-0 z-50 hidden bg-stone-900/40 dark:bg-black/60" aria-hidden="true">
       <div class="max-w-lg mx-auto mt-[18vh] px-4">
         <form id="capture-form" class="bg-white dark:bg-stone-900 rounded-2xl p-4 border border-stone-200 dark:border-stone-700">
-          <label for="capture-input" class="block text-sm text-stone-500 dark:text-stone-400 mb-2">
-            ¿Qué tienes en la cabeza?
-          </label>
+          <div class="flex items-center justify-between mb-2">
+            <label for="capture-input" class="block text-sm text-stone-500 dark:text-stone-400">
+              ¿Qué tienes en la cabeza?
+            </label>
+            <button
+              type="button"
+              class="w-11 h-11 -my-2 shrink-0 inline-flex items-center justify-center"
+              data-action="help-capture"
+              aria-label="¿Qué se captura?"
+              aria-haspopup="dialog"
+            >
+              <span class="w-5 h-5 rounded-full border border-stone-300 dark:border-stone-600 text-xs font-semibold text-stone-400 dark:text-stone-500 flex items-center justify-center" aria-hidden="true">?</span>
+            </button>
+          </div>
           <input
             id="capture-input"
             type="text"
@@ -52,6 +63,18 @@
             placeholder="Escríbelo y suéltalo…"
             class="w-full text-lg bg-transparent outline-none placeholder-stone-400 dark:placeholder-stone-500"
           />
+          <button
+            type="button"
+            id="capture-notes-toggle"
+            class="mt-2 min-h-[44px] text-sm text-stone-400 dark:text-stone-500 hover:text-accent transition-colors duration-150"
+          >+ Añadir nota</button>
+          <textarea
+            id="capture-notes"
+            rows="4"
+            class="hidden w-full mt-2 text-sm bg-transparent outline-none placeholder-stone-400 dark:placeholder-stone-500"
+            placeholder="Apuntes de una reunión, una idea desarrollada, el texto completo… Se guarda junto con la captura."
+            aria-label="Nota (opcional)"
+          ></textarea>
           <div class="flex items-center justify-between mt-4">
             <span class="text-xs text-stone-400 dark:text-stone-500">Enter para guardar · Esc para cerrar</span>
             <button type="submit" class="min-h-[44px] px-5 rounded-xl bg-accent text-white font-medium hover:bg-accent-dark transition-colors duration-150">
@@ -170,6 +193,82 @@
           <div class="flex items-center justify-end">
             <button
               id="context-help-ok"
+              type="button"
+              class="min-h-[44px] px-5 rounded-xl bg-accent text-white font-medium hover:bg-accent-dark transition-colors duration-150"
+            >Entendido</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Help popup: what belongs in the inbox (opened from the capture overlay and the Inbox view).
+         Definition per the official GTD Setup Guide, p. 5 ("Notes/In") and p. 2 ("Capture"). -->
+    <div id="capture-help-overlay" class="fixed inset-0 z-50 hidden bg-stone-900/40 dark:bg-black/60" aria-hidden="true">
+      <div class="max-w-lg mx-auto mt-[18vh] px-4">
+        <div
+          class="relative bg-white dark:bg-stone-900 rounded-2xl p-5 border border-stone-200 dark:border-stone-700"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="capture-help-title"
+        >
+          <button
+            id="capture-help-close"
+            type="button"
+            aria-label="Cerrar"
+            class="absolute top-1 right-1 w-11 h-11 flex items-center justify-center text-2xl leading-none text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300 transition-colors duration-150"
+          >&times;</button>
+          <h2 id="capture-help-title" class="font-semibold text-lg tracking-tight mb-2">¿Qué se captura?</h2>
+          <p class="text-sm text-stone-500 dark:text-stone-400 mb-4">
+            La bandeja de entrada es tu punto de recogida de confianza: saca de la cabeza
+            <strong>cualquier cosa</strong> que reclame tu atención y suéltala aquí, para aclararla después.
+          </p>
+          <ol class="text-sm text-stone-500 dark:text-stone-400 mb-4 space-y-2 list-decimal pl-5">
+            <li><strong>Todo cuenta, de cualquier tamaño.</strong> Una palabra suelta, una idea o una nota completa: apuntes de una reunión, el borrador de un texto… Usa «Añadir nota» cuando el título no baste.</li>
+            <li><strong>No decidas nada ahora.</strong> Capturar y aclarar son pasos distintos: aquí no clasificas, no priorizas, no planificas. Solo suéltalo y sigue con lo tuyo.</li>
+            <li><strong>Confía en el vaciado.</strong> Capturar libera la mente porque sabes que procesarás la bandeja: cada elemento se aclara, uno a uno, en «Procesar».</li>
+          </ol>
+          <div class="flex items-center justify-end">
+            <button
+              id="capture-help-ok"
+              type="button"
+              class="min-h-[44px] px-5 rounded-xl bg-accent text-white font-medium hover:bg-accent-dark transition-colors duration-150"
+            >Entendido</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Help popup: rewriting while clarifying (opened from the Clarify wizard).
+         Per the official GTD Setup Guide, p. 2 ("Clarify: define actionable things into
+         concrete next steps") and p. 8 (next actions are physical, visible steps). -->
+    <div id="rewrite-help-overlay" class="fixed inset-0 z-50 hidden bg-stone-900/40 dark:bg-black/60" aria-hidden="true">
+      <div class="max-w-lg mx-auto mt-[18vh] px-4">
+        <div
+          class="relative bg-white dark:bg-stone-900 rounded-2xl p-5 border border-stone-200 dark:border-stone-700"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="rewrite-help-title"
+        >
+          <button
+            id="rewrite-help-close"
+            type="button"
+            aria-label="Cerrar"
+            class="absolute top-1 right-1 w-11 h-11 flex items-center justify-center text-2xl leading-none text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300 transition-colors duration-150"
+          >&times;</button>
+          <h2 id="rewrite-help-title" class="font-semibold text-lg tracking-tight mb-2">Reescribe para aclarar</h2>
+          <p class="text-sm text-stone-500 dark:text-stone-400 mb-4">
+            Lo que capturaste es material en bruto. Aclarar es <strong>transformarlo</strong>:
+            definir el paso concreto y el resultado que quieres. Toca el texto de arriba
+            para reescribirlo mientras decides.
+          </p>
+          <ol class="text-sm text-stone-500 dark:text-stone-400 mb-4 space-y-2 list-decimal pl-5">
+            <li><strong>Del tema a la acción.</strong> «Dentista» no se puede hacer; «Llamar a la clínica y pedir cita» sí. Reescríbelo como una acción física y visible.</li>
+            <li><strong>Empieza por un verbo.</strong> Llamar, comprar, escribir, enviar… Si no encuentras el verbo, todavía no está claro.</li>
+            <li><strong>El detalle va en la nota.</strong> El título es el recordatorio; lo que necesitarás para hacerlo (teléfonos, enlaces, contexto) guárdalo en la nota.</li>
+          </ol>
+          <div class="flex items-center justify-end">
+            <button
+              id="rewrite-help-ok"
               type="button"
               class="min-h-[44px] px-5 rounded-xl bg-accent text-white font-medium hover:bg-accent-dark transition-colors duration-150"
             >Entendido</button>

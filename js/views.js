@@ -288,9 +288,15 @@
     var items = model.inboxItems();
     var html = header('Bandeja de entrada', 'Suelta aquí todo lo que ocupe tu mente.');
     html +=
-      '<form id="inbox-capture" class="card flex items-center gap-2 px-3 py-2 mb-6">' +
-      '<input type="text" id="inbox-input" class="flex-1 min-h-[44px] bg-transparent outline-none px-1 placeholder-stone-400 dark:placeholder-stone-500" placeholder="¿Qué tienes en la cabeza?" autocomplete="off" />' +
+      '<form id="inbox-capture" class="card px-3 py-2 mb-6">' +
+      '<div class="flex items-center gap-2">' +
+      '<input type="text" id="inbox-input" class="flex-1 min-w-0 min-h-[44px] bg-transparent outline-none px-1 placeholder-stone-400 dark:placeholder-stone-500" placeholder="¿Qué tienes en la cabeza?" autocomplete="off" />' +
+      helpIcon('help-capture', '¿Qué se captura?') +
       '<button type="submit" class="btn-primary">Capturar</button>' +
+      '</div>' +
+      '<button type="button" id="inbox-notes-toggle" class="min-h-[44px] px-1 text-sm text-stone-400 dark:text-stone-500 hover:text-accent transition-colors duration-150">+ Añadir nota</button>' +
+      '<textarea id="inbox-notes" rows="3" class="hidden w-full px-1 pb-2 text-sm bg-transparent outline-none placeholder-stone-400 dark:placeholder-stone-500" ' +
+      'placeholder="Apuntes de una reunión, una idea desarrollada, el texto completo… Se guarda junto con la captura." aria-label="Nota (opcional)"></textarea>' +
       '</form>';
     if (items.length) {
       html +=
@@ -776,14 +782,18 @@
       refresh();
     });
 
-    // Inbox capture form.
+    // Inbox capture form. The re-render after capture collapses the notes
+    // field again, keeping the default single-line, zero-friction shape.
+    $view.on('click', '#inbox-notes-toggle', function () {
+      $(this).addClass('hidden');
+      $('#inbox-notes').removeClass('hidden').trigger('focus');
+    });
+
     $view.on('submit', '#inbox-capture', function (e) {
       e.preventDefault();
-      var $input = $('#inbox-input');
-      var title = $input.val().trim();
-      if (!title) return;
-      store.addItem({ title: title });
-      $input.val('');
+      var title = $('#inbox-input').val().trim();
+      var notes = $('#inbox-notes').val().trim();
+      if (!global.GTD.app.captureItem(title, notes)) return;
       refresh();
       $('#inbox-input').trigger('focus');
     });
