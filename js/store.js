@@ -80,6 +80,7 @@
         projectId: null,
         context: null,
         date: null,
+        time: null,
         tickleDate: null,
         waitingFor: null,
         isFocus: false,

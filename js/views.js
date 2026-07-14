@@ -69,7 +69,7 @@
       var overdue = item.date < model.todayISO();
       bits.push(
         '<span class="' + (overdue ? 'text-red-600 dark:text-red-400' : '') + '">' +
-        esc(model.formatDate(item.date)) + '</span>'
+        esc(model.formatDate(item.date)) + (item.time ? ' · ' + esc(item.time) : '') + '</span>'
       );
     }
     if (item.status === model.STATUS.WAITING && item.waitingFor) {
@@ -123,12 +123,11 @@
   }
 
   // Anchor that pre-fills the event in Google Calendar (opens a new tab; needs network).
-  function gcalLink(item, withLabel) {
+  function gcalLink(item) {
     return (
       '<a href="' + esc(model.gcalUrl(item)) + '" target="_blank" rel="noopener noreferrer" ' +
       'class="btn-ghost shrink-0 gap-2" aria-label="Añadir a Google Calendar">' +
       gcalIcon() +
-      (withLabel ? '<span class="text-sm">Google Calendar</span>' : '') +
       '</a>'
     );
   }
@@ -170,12 +169,13 @@
       '<select class="field" data-field="context" aria-label="Contexto">' + contextOptions(item.context) + '</select>' +
       '<select class="field" data-field="projectId" aria-label="Proyecto">' + projectOptions(item.projectId) + '</select>' +
       '<input type="date" class="field" data-field="date" value="' + esc(item.date || '') + '" aria-label="Fecha" />' +
+      '<input type="time" class="field" data-field="time" value="' + esc(item.time || '') + '" aria-label="Hora (opcional)" />' +
       '</div>' +
       '<input type="text" class="field" data-field="waitingFor" value="' + esc(item.waitingFor || '') + '" placeholder="¿De quién esperas respuesta?" aria-label="A la espera de" ' +
       (item.status === model.STATUS.WAITING ? '' : 'style="display:none"') + ' />' +
       '<div class="flex items-center justify-between gap-2 pt-1">' +
       '<button type="button" class="btn-ghost text-red-500 dark:text-red-400" data-action="delete" data-id="' + item.id + '">Eliminar</button>' +
-      (item.status === model.STATUS.SCHEDULED && item.date ? gcalLink(item, false) : '') +
+      (item.status === model.STATUS.SCHEDULED && item.date ? gcalLink(item) : '') +
       '<button type="button" class="btn-primary" data-action="save-item" data-id="' + item.id + '">Guardar</button>' +
       '</div>' +
       '</div>'
@@ -394,7 +394,7 @@
 
     function agendaList(items) {
       return '<ul>' + items.map(function (item) {
-        return itemRow(item, { trailing: gcalLink(item, false) });
+        return itemRow(item, { trailing: gcalLink(item) });
       }).join('') + '</ul>';
     }
 
@@ -528,10 +528,14 @@
         context: $editor.find('[data-field="context"]').val() || null,
         projectId: $editor.find('[data-field="projectId"]').val() || null,
         date: $editor.find('[data-field="date"]').val() || null,
+        time: $editor.find('[data-field="time"]').val() || null,
         waitingFor: $editor.find('[data-field="waitingFor"]').val() || null,
       };
       if (fields.status === model.STATUS.SCHEDULED && !fields.date) fields.status = model.STATUS.NEXT;
-      if (fields.status !== model.STATUS.SCHEDULED) fields.date = null;
+      if (fields.status !== model.STATUS.SCHEDULED) {
+        fields.date = null;
+        fields.time = null;
+      }
       if (fields.status !== model.STATUS.WAITING) fields.waitingFor = null;
       if (fields.status !== model.STATUS.SOMEDAY) fields.tickleDate = null;
       store.updateItem(id, fields);
