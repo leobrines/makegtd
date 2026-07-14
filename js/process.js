@@ -1,6 +1,7 @@
 /* Clarify wizard: walks the GTD decision tree one question at a time.
    The step order follows the official GTD Workflow Map (docs/gtd/gtd-workflow-map.pdf):
    is it actionable? -> no: trash / incubate (someday or date trigger) / reference
+                        (optionally filed as project support material)
                      -> yes: multi-step? -> define the project (desired outcome) and
                         its first action; then decide for the action: do it (<2 min),
                         delegate (waiting for), or defer (calendar or next actions). */
@@ -61,14 +62,15 @@
   }
 
   // Optional link to an existing project, shown on the defer/delegate endings of the
-  // single-step path (Setup Guide p. 8: next actions may be steps of current projects).
-  function projectSelect(item) {
+  // single-step path (Setup Guide p. 8: next actions may be steps of current projects)
+  // and on the reference ending (workflow map: Project Support Material).
+  function projectSelect(item, label) {
     if (pending) return ''; // Multi-step path: the action belongs to the new project.
     var projects = model.activeProjects();
     if (!projects.length) return '';
     var html =
       '<label class="block mb-3">' +
-      '<span class="block text-xs text-stone-400 dark:text-stone-500 mb-1">¿Es parte de un proyecto? (opcional)</span>' +
+      '<span class="block text-xs text-stone-400 dark:text-stone-500 mb-1">' + esc(label || '¿Es parte de un proyecto? (opcional)') + '</span>' +
       '<select id="pz-project-select" class="field">' +
       '<option value="">Sin proyecto</option>';
     projects.forEach(function (p) {
@@ -154,6 +156,16 @@
           '<span class="block text-xs text-stone-400 dark:text-stone-500 mb-1">O que vuelva a la bandeja un día concreto:</span>' +
           '<input type="date" id="pz-tickle-input" class="field mb-3" min="' + tomorrowISO + '" />' +
           '<button type="submit" class="btn-secondary w-full">Recordármelo ese día</button>' +
+          '</form>';
+        html += backLink();
+        break;
+
+      case 'reference':
+        html += question('¿Es material de apoyo de un proyecto?');
+        html +=
+          '<form id="pz-reference-form">' +
+          projectSelect(item, 'Proyecto (opcional)') +
+          '<button type="submit" class="btn-primary w-full">Guardar como referencia</button>' +
           '</form>';
         html += backLink();
         break;
@@ -296,6 +308,7 @@
       var back = {
         'not-actionable': 'actionable',
         incubate: 'not-actionable',
+        reference: 'not-actionable',
         steps: 'actionable',
         'two-minutes': 'steps',
         'doing-now': 'two-minutes',
@@ -335,9 +348,23 @@
       finishItem('Volverá a la bandeja el ' + model.formatDate(date));
     });
 
+    // Reference: if there are active projects, offer to file it as project support
+    // material (workflow map); with no projects, save directly without extra friction.
     $view.on('click', '[data-action="pz-reference"]', function () {
-      store.updateItem(itemId, { status: model.STATUS.REFERENCE });
-      finishItem('Guardada como referencia');
+      if (!model.activeProjects().length) {
+        store.updateItem(itemId, { status: model.STATUS.REFERENCE });
+        finishItem('Guardada como referencia');
+        return;
+      }
+      go('reference');
+    });
+
+    $view.on('submit', '#pz-reference-form', function (e) {
+      e.preventDefault();
+      var item = store.getItem(itemId);
+      var projectId = selectedProjectId(item);
+      store.updateItem(itemId, { status: model.STATUS.REFERENCE, projectId: projectId });
+      finishItem(projectId ? 'Guardada como material de apoyo del proyecto' : 'Guardada como referencia');
     });
 
     $view.on('click', '[data-action="pz-single"]', function () {

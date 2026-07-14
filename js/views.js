@@ -318,7 +318,9 @@
     html += '<ul>';
     active.forEach(function (p) {
       var isStalled = stalled.some(function (s) { return s.id === p.id; });
-      var count = model.projectItems(p.id).filter(function (i) { return i.status !== 'done'; }).length;
+      var count = model.projectItems(p.id).filter(function (i) {
+        return i.status !== 'done' && i.status !== model.STATUS.REFERENCE;
+      }).length;
       html +=
         '<li class="card mb-2">' +
         '<a href="#/proyectos/' + p.id + '" class="flex items-center gap-3 px-4 min-h-[52px] py-3">' +
@@ -338,7 +340,8 @@
     var project = store.getProject(projectId);
     if (!project) return emptyState('🤔', 'Este proyecto ya no existe.', 'Volver a proyectos', '#/proyectos');
     var items = model.projectItems(projectId);
-    var open = items.filter(function (i) { return i.status !== 'done'; });
+    var support = items.filter(function (i) { return i.status === model.STATUS.REFERENCE; });
+    var open = items.filter(function (i) { return i.status !== 'done' && i.status !== model.STATUS.REFERENCE; });
     var done = items.filter(function (i) { return i.status === 'done'; });
 
     var html =
@@ -365,6 +368,12 @@
 
     if (open.length) html += list(open);
     else html += emptyState('✨', 'Nada pendiente en este proyecto.');
+
+    // Project support material (workflow map): reference items filed under this project.
+    if (support.length) {
+      html += sectionTitle('Material de apoyo');
+      html += list(support);
+    }
 
     if (done.length) {
       html += sectionTitle('Hechas');
@@ -623,7 +632,9 @@
 
     $view.on('click', '[data-action="complete-project"]', function () {
       var id = $(this).data('id');
-      var open = model.projectItems(id).filter(function (i) { return i.status !== model.STATUS.DONE; });
+      var open = model.projectItems(id).filter(function (i) {
+        return i.status !== model.STATUS.DONE && i.status !== model.STATUS.REFERENCE;
+      });
       if (open.length) {
         var msg = open.length === 1
           ? 'Este proyecto tiene 1 acción pendiente. ¿Completarlo igualmente? La acción seguirá en tus listas.'
