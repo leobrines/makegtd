@@ -88,6 +88,9 @@
     if (item.status === model.STATUS.SOMEDAY && item.tickleDate) {
       bits.push('<span>Vuelve el ' + esc(model.formatDate(item.tickleDate)) + '</span>');
     }
+    if (item.estimate && model.timeEstimates().length) bits.push('<span>⏱ ' + esc(item.estimate) + '</span>');
+    if (item.energy && model.energyLevels().length) bits.push('<span>🔋 ' + esc(item.energy) + '</span>');
+    if (item.priority && model.priorities().length) bits.push('<span>⚑ ' + esc(item.priority) + '</span>');
     if (!bits.length) return '';
     return '<div class="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-stone-400 dark:text-stone-500 mt-0.5">' + bits.join('') + '</div>';
   }
@@ -162,10 +165,28 @@
     var order = ['next', 'scheduled', 'waiting', 'someday', 'reference', 'inbox'];
     var html = '';
     order.forEach(function (s) {
+      // Reference disabled: hide the option unless the item already is one.
+      if (s === 'reference' && s !== selected && !model.referenceEnabled()) return;
       html += '<option value="' + s + '"' + (s === selected ? ' selected' : '') + '>' +
         esc(model.STATUS_LABELS[s]) + '</option>';
     });
     return html;
+  }
+
+  // Select for one Engage criterion (estimate/energy/priority). Empty list =>
+  // the field is off; render nothing.
+  function criterionSelect(field, label, emptyLabel, values, selected) {
+    if (!values.length) return '';
+    var html = '<select class="field" data-field="' + field + '" aria-label="' + esc(label) + '">' +
+      '<option value="">' + esc(emptyLabel) + '</option>';
+    values.forEach(function (v) {
+      html += '<option value="' + esc(v) + '"' + (v === selected ? ' selected' : '') + '>' + esc(v) + '</option>';
+    });
+    // A stored value no longer in the list stays selectable until changed.
+    if (selected && values.indexOf(selected) === -1) {
+      html += '<option value="' + esc(selected) + '" selected>' + esc(selected) + '</option>';
+    }
+    return html + '</select>';
   }
 
   // Inline editor shown under an expanded row.
@@ -182,12 +203,15 @@
       '<select class="field" data-field="projectId" aria-label="Proyecto">' + projectOptions(item.projectId) + '</select>' +
       '<input type="date" class="field" data-field="date" value="' + esc(item.date || '') + '" aria-label="Fecha" />' +
       '<input type="time" class="field" data-field="time" value="' + esc(item.time || '') + '" aria-label="Hora (opcional)" />' +
+      criterionSelect('estimate', 'Tiempo estimado', 'Sin tiempo estimado', model.timeEstimates(), item.estimate) +
+      criterionSelect('energy', 'Nivel de energía', 'Sin nivel de energía', model.energyLevels(), item.energy) +
+      criterionSelect('priority', 'Prioridad', 'Sin prioridad', model.priorities(), item.priority) +
       '</div>' +
       '<input type="text" class="field" data-field="waitingFor" value="' + esc(item.waitingFor || '') + '" placeholder="¿De quién esperas respuesta?" aria-label="A la espera de" ' +
       (item.status === model.STATUS.WAITING ? '' : 'style="display:none"') + ' />' +
       '<div class="flex items-center justify-between gap-2 pt-1">' +
       '<button type="button" class="btn-ghost text-red-500 dark:text-red-400" data-action="delete" data-id="' + item.id + '">Eliminar</button>' +
-      (item.status === model.STATUS.SCHEDULED && item.date ? gcalLink(item) : '') +
+      (item.status === model.STATUS.SCHEDULED && item.date && model.gcalEnabled() ? gcalLink(item) : '') +
       '<button type="button" class="btn-primary" data-action="save-item" data-id="' + item.id + '">Guardar</button>' +
       '</div>' +
       '</div>'
@@ -419,8 +443,9 @@
     }
 
     function agendaList(items) {
+      var gcalOn = model.gcalEnabled();
       return '<ul>' + items.map(function (item) {
-        return itemRow(item, { trailing: gcalLink(item) });
+        return itemRow(item, { trailing: gcalOn ? gcalLink(item) : '' });
       }).join('') + '</ul>';
     }
 
@@ -536,6 +561,44 @@
     return html;
   }
 
+  // One settings on/off row: title + short explanation + checkbox.
+  function toggleRow(id, title, hint, checked, extraClass) {
+    return (
+      '<label class="flex items-center justify-between gap-3 min-h-[44px] cursor-pointer' + (extraClass || '') + '">' +
+      '<span class="min-w-0">' +
+      '<span class="block">' + esc(title) + '</span>' +
+      '<span class="block text-xs text-stone-400 dark:text-stone-500 mt-0.5">' + esc(hint) + '</span>' +
+      '</span>' +
+      '<input type="checkbox" id="' + id + '" class="w-6 h-6 shrink-0 accent-accent"' + (checked ? ' checked' : '') + ' />' +
+      '</label>'
+    );
+  }
+
+  // Editable value list for one Engage criterion (mirrors the contexts editor).
+  function criterionEditor(key, title, placeholder) {
+    var values = store.getCriterionValues(key);
+    var html = '<div class="card px-4 py-4 mb-2">';
+    html += '<p class="mb-1">' + esc(title) + '</p>';
+    if (values.length) {
+      html += '<ul class="mb-3">' + values.map(function (v) {
+        return (
+          '<li class="flex items-center justify-between min-h-[44px] border-b border-stone-100 dark:border-stone-800 last:border-0">' +
+          '<span>' + esc(v) + '</span>' +
+          '<button type="button" class="btn-ghost text-red-500 dark:text-red-400" data-action="remove-criterion-value" data-criterion="' + key + '" data-value="' + esc(v) + '" aria-label="Eliminar ' + esc(v) + '">×</button>' +
+          '</li>'
+        );
+      }).join('') + '</ul>';
+    } else {
+      html += '<p class="text-xs text-stone-400 dark:text-stone-500 mb-3">Sin valores: este campo no se muestra en las tareas.</p>';
+    }
+    html +=
+      '<form class="criterion-form flex gap-2" data-criterion="' + key + '">' +
+      '<input type="text" class="field flex-1 criterion-input" placeholder="' + esc(placeholder) + '" autocomplete="off" />' +
+      '<button type="submit" class="btn-secondary">Añadir</button>' +
+      '</form>';
+    return html + '</div>';
+  }
+
   function renderSettings() {
     var contexts = store.getContexts();
     var contextsOn = model.contextsEnabled();
@@ -543,15 +606,13 @@
 
     html += sectionTitle('Contextos', helpIcon('help-context', '¿Qué es un contexto?'));
     html += '<div class="card px-4 py-4">';
-    html +=
-      '<label class="flex items-center justify-between gap-3 min-h-[44px] cursor-pointer' +
-      (contextsOn ? ' pb-3 mb-3 border-b border-stone-100 dark:border-stone-800' : '') + '">' +
-      '<span class="min-w-0">' +
-      '<span class="block">Usar contextos</span>' +
-      '<span class="block text-xs text-stone-400 dark:text-stone-500 mt-0.5">Si los desactivas, desaparecen de toda la app y verás una única lista de próximas acciones.</span>' +
-      '</span>' +
-      '<input type="checkbox" id="contexts-enabled-toggle" class="w-6 h-6 shrink-0 accent-accent"' + (contextsOn ? ' checked' : '') + ' />' +
-      '</label>';
+    html += toggleRow(
+      'contexts-enabled-toggle',
+      'Usar contextos',
+      'Si los desactivas, desaparecen de toda la app y verás una única lista de próximas acciones.',
+      contextsOn,
+      contextsOn ? ' pb-3 mb-3 border-b border-stone-100 dark:border-stone-800' : ''
+    );
     if (contextsOn) {
       html += '<ul class="mb-3">' + contexts.map(function (c) {
         return (
@@ -567,6 +628,54 @@
         '<button type="submit" class="btn-secondary">Añadir</button>' +
         '</form>';
     }
+    html += '</div>';
+
+    html += sectionTitle('Criterios para elegir qué hacer');
+    html +=
+      '<p class="text-xs text-stone-400 dark:text-stone-500 mb-2 px-1">' +
+      'Tiempo, energía y prioridad ayudan a elegir la siguiente acción (junto al contexto). ' +
+      'Personaliza los valores; si vacías una lista, ese campo desaparece de las tareas.' +
+      '</p>';
+    html += criterionEditor('timeEstimates', 'Tiempo estimado', 'Ej.: 45 min');
+    html += criterionEditor('energyLevels', 'Nivel de energía', 'Ej.: Muy baja');
+    html += criterionEditor('priorities', 'Prioridad', 'Ej.: Urgente');
+
+    html += sectionTitle('Revisión semanal');
+    html += '<div class="card px-4 py-4">';
+    html +=
+      '<label class="block">' +
+      '<span class="block">Día preferido de revisión</span>' +
+      '<span class="block text-xs text-stone-400 dark:text-stone-500 mt-0.5 mb-2">El recordatorio aparecerá ese día de la semana y hasta que completes la revisión.</span>' +
+      '<select id="review-day-select" class="field">';
+    var reviewDay = model.reviewDay();
+    var dayNames = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+    html += '<option value=""' + (reviewDay === null ? ' selected' : '') + '>Sin día fijo (cada 7 días)</option>';
+    [1, 2, 3, 4, 5, 6, 0].forEach(function (d) {
+      html += '<option value="' + d + '"' + (reviewDay === d ? ' selected' : '') + '>' +
+        dayNames[d].charAt(0).toUpperCase() + dayNames[d].slice(1) + '</option>';
+    });
+    html += '</select></label></div>';
+
+    html += sectionTitle('Funciones');
+    html += '<div class="card px-4 py-4 divide-y divide-stone-100 dark:divide-stone-800">';
+    html += toggleRow(
+      'reference-enabled-toggle',
+      'Lista de referencia',
+      'Si la desactivas, desaparecen la lista y la opción «Referencia» al procesar. Lo guardado se conserva.',
+      model.referenceEnabled()
+    );
+    html += toggleRow(
+      'gcal-enabled-toggle',
+      'Botones de Google Calendar',
+      'Muestra u oculta los botones para añadir tareas con fecha a Google Calendar.',
+      model.gcalEnabled()
+    );
+    html += toggleRow(
+      'capture-shortcut-toggle',
+      'Tecla rápida de captura (n)',
+      'Pulsa «n» en cualquier vista para capturar. El botón «+» funciona siempre.',
+      model.captureShortcutEnabled()
+    );
     html += '</div>';
 
     html += sectionTitle('Tus datos');
@@ -622,9 +731,14 @@
         waitingFor: $editor.find('[data-field="waitingFor"]').val() || null,
       };
       // The context select is absent while contexts are disabled; skip the
-      // field so stored contexts survive a temporary toggle-off.
+      // field so stored contexts survive a temporary toggle-off. Same for the
+      // Engage criteria selects, absent while their value list is empty.
       var $context = $editor.find('[data-field="context"]');
       if ($context.length) fields.context = $context.val() || null;
+      ['estimate', 'energy', 'priority'].forEach(function (field) {
+        var $select = $editor.find('[data-field="' + field + '"]');
+        if ($select.length) fields[field] = $select.val() || null;
+      });
       if (fields.status === model.STATUS.SCHEDULED && !fields.date) fields.status = model.STATUS.NEXT;
       if (fields.status !== model.STATUS.SCHEDULED) {
         fields.date = null;
@@ -809,6 +923,42 @@
     });
     $view.on('click', '[data-action="remove-context"]', function () {
       store.removeContext($(this).data('context'));
+      refresh();
+    });
+
+    $view.on('change', '#reference-enabled-toggle', function () {
+      store.updateSettings({ referenceEnabled: this.checked });
+      toast(this.checked ? 'Lista de referencia activada' : 'Lista de referencia desactivada');
+      refresh();
+    });
+
+    $view.on('change', '#gcal-enabled-toggle', function () {
+      store.updateSettings({ gcalEnabled: this.checked });
+      toast(this.checked ? 'Botones de Google Calendar activados' : 'Botones de Google Calendar desactivados');
+      refresh();
+    });
+
+    $view.on('change', '#capture-shortcut-toggle', function () {
+      store.updateSettings({ captureShortcutEnabled: this.checked });
+      toast(this.checked ? 'Tecla rápida activada' : 'Tecla rápida desactivada');
+      refresh();
+    });
+
+    $view.on('change', '#review-day-select', function () {
+      var value = $(this).val();
+      store.updateSettings({ reviewDay: value === '' ? null : Number(value) });
+      toast('Guardado');
+      refresh();
+    });
+
+    $view.on('submit', '.criterion-form', function (e) {
+      e.preventDefault();
+      var key = $(this).data('criterion');
+      var name = $(this).find('.criterion-input').val();
+      if (store.addCriterionValue(key, name)) refresh();
+    });
+    $view.on('click', '[data-action="remove-criterion-value"]', function () {
+      store.removeCriterionValue($(this).data('criterion'), $(this).data('value'));
       refresh();
     });
 

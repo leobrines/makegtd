@@ -234,12 +234,18 @@
       }
 
       case 'checklists': {
-        var reference = model.referenceItems();
         html += stepTitle('Repasa tus listas de referencia');
         html += stepHint('Úsalas como disparador: ¿te recuerdan alguna acción nueva? Captúrala aquí.');
-        html += reference.length
-          ? '<p class="text-sm text-stone-500 dark:text-stone-400 mb-3">Tienes ' + reference.length + ' elemento' + (reference.length === 1 ? '' : 's') + ' en <a href="#/referencia" class="text-accent">Referencia</a>.</p>'
-          : '<p class="text-sm text-stone-500 dark:text-stone-400 mb-3">No tienes material de referencia todavía.</p>';
+        // The step stays even with the in-app Reference list off (the official
+        // checklist keeps it); it then points at wherever the user keeps them.
+        if (model.referenceEnabled()) {
+          var reference = model.referenceItems();
+          html += reference.length
+            ? '<p class="text-sm text-stone-500 dark:text-stone-400 mb-3">Tienes ' + reference.length + ' elemento' + (reference.length === 1 ? '' : 's') + ' en <a href="#/referencia" class="text-accent">Referencia</a>.</p>'
+            : '<p class="text-sm text-stone-500 dark:text-stone-400 mb-3">No tienes material de referencia todavía.</p>';
+        } else {
+          html += '<p class="text-sm text-stone-500 dark:text-stone-400 mb-3">Repasa las listas y checklists que guardes fuera de la app.</p>';
+        }
         html += captureForm('¿Alguna acción nueva que capturar?');
         html += continueButton();
         break;

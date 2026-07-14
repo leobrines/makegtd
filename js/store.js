@@ -6,6 +6,20 @@
 
   var DEFAULT_CONTEXTS = ['@casa', '@trabajo', '@recados', '@llamadas', '@ordenador'];
 
+  // Default value lists for the Engage four-criteria model (workflow map:
+  // context, time available, energy available, priority). Each list is
+  // user-editable in Settings; emptying a list hides that field everywhere.
+  var DEFAULT_TIME_ESTIMATES = ['5 min', '15 min', '30 min', '1 h', '2 h+'];
+  var DEFAULT_ENERGY_LEVELS = ['Alta', 'Media', 'Baja'];
+  var DEFAULT_PRIORITIES = ['Alta', 'Media', 'Baja'];
+
+  // Settings keys of the editable criterion lists -> item field each one feeds.
+  var CRITERIA = {
+    timeEstimates: 'estimate',
+    energyLevels: 'energy',
+    priorities: 'priority',
+  };
+
   function defaultState() {
     return {
       version: 1,
@@ -22,6 +36,19 @@
         // Contexts are optional in GTD (Setup Guide: a single "Todas" list is
         // fine); this flag hides the whole feature across the app when false.
         contextsEnabled: true,
+        // Reference is a canonical section but may live outside the app; this
+        // flag hides the list, the nav entry and the Clarify choice when false.
+        referenceEnabled: true,
+        // "Add to Google Calendar" buttons (the app's only outward link).
+        gcalEnabled: true,
+        // Global 'n' keyboard shortcut for quick capture (the FAB always works).
+        captureShortcutEnabled: true,
+        // Preferred weekday for the weekly review: 0 (Sunday) … 6 (Saturday),
+        // or null to fall back to the plain "7 days since last review" rule.
+        reviewDay: null,
+        timeEstimates: DEFAULT_TIME_ESTIMATES.slice(),
+        energyLevels: DEFAULT_ENERGY_LEVELS.slice(),
+        priorities: DEFAULT_PRIORITIES.slice(),
       },
     };
   }
@@ -56,6 +83,9 @@
       projects: Array.isArray(trash.projects) ? trash.projects : [],
     };
     data.settings = Object.assign({}, base.settings, data.settings || {});
+    Object.keys(CRITERIA).forEach(function (key) {
+      if (!Array.isArray(data.settings[key])) data.settings[key] = base.settings[key];
+    });
     return data;
   }
 
@@ -95,6 +125,9 @@
         time: null,
         tickleDate: null,
         waitingFor: null,
+        estimate: null,
+        energy: null,
+        priority: null,
         isFocus: false,
         createdAt: now,
         completedAt: null,
@@ -278,6 +311,43 @@
     save();
   }
 
+  // ---- Engage criteria value lists (time estimate / energy / priority) ----
+
+  function getCriterionValues(key) {
+    if (!CRITERIA.hasOwnProperty(key)) return [];
+    return load().settings[key];
+  }
+
+  function addCriterionValue(key, name) {
+    if (!CRITERIA.hasOwnProperty(key)) return false;
+    name = String(name || '').trim();
+    if (!name) return false;
+    var values = load().settings[key];
+    var exists = values.some(function (v) {
+      return v.toLowerCase() === name.toLowerCase();
+    });
+    if (exists) return false;
+    values.push(name);
+    save();
+    return name;
+  }
+
+  function removeCriterionValue(key, name) {
+    if (!CRITERIA.hasOwnProperty(key)) return;
+    var s = load();
+    s.settings[key] = s.settings[key].filter(function (v) {
+      return v !== name;
+    });
+    var field = CRITERIA[key];
+    s.items.forEach(function (item) {
+      if (item[field] === name) item[field] = null;
+    });
+    s.trash.items.forEach(function (item) {
+      if (item[field] === name) item[field] = null;
+    });
+    save();
+  }
+
   // ---- Settings ----
 
   function getSettings() {
@@ -331,6 +401,9 @@
     getContexts: getContexts,
     addContext: addContext,
     removeContext: removeContext,
+    getCriterionValues: getCriterionValues,
+    addCriterionValue: addCriterionValue,
+    removeCriterionValue: removeCriterionValue,
     getSettings: getSettings,
     updateSettings: updateSettings,
     exportJSON: exportJSON,
