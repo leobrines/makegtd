@@ -184,6 +184,37 @@
     return store.getSettings().contextsEnabled !== false;
   }
 
+  // Whether the Reference list is on. When off, the nav entry, the view and
+  // the Clarify choice disappear; stored reference items are kept (project
+  // support material stays visible inside its project).
+  function referenceEnabled() {
+    return store.getSettings().referenceEnabled !== false;
+  }
+
+  // Whether the "add to Google Calendar" buttons are shown.
+  function gcalEnabled() {
+    return store.getSettings().gcalEnabled !== false;
+  }
+
+  // Whether the global 'n' quick-capture shortcut is on (the FAB always works).
+  function captureShortcutEnabled() {
+    return store.getSettings().captureShortcutEnabled !== false;
+  }
+
+  // Engage criteria (workflow map four-criteria model): user-editable value
+  // lists. An empty list hides that field across the app.
+  function timeEstimates() {
+    return store.getCriterionValues('timeEstimates');
+  }
+
+  function energyLevels() {
+    return store.getCriterionValues('energyLevels');
+  }
+
+  function priorities() {
+    return store.getCriterionValues('priorities');
+  }
+
   function activeProjects() {
     return store.getProjects().filter(function (p) {
       return p.status === 'active';
@@ -276,9 +307,31 @@
     return Math.floor(ms / (24 * 60 * 60 * 1000));
   }
 
+  // Preferred weekday for the weekly review: 0 (Sunday) … 6 (Saturday), or
+  // null to use the plain "7 days since last review" rule.
+  function reviewDay() {
+    var day = store.getSettings().reviewDay;
+    return typeof day === 'number' && day >= 0 && day <= 6 ? day : null;
+  }
+
   function reviewIsDue() {
     var days = daysSinceReview();
-    return days === null || days >= REVIEW_INTERVAL_DAYS;
+    if (days === null) return true;
+    var day = reviewDay();
+    if (day === null) return days >= REVIEW_INTERVAL_DAYS;
+    // Due from the most recent occurrence of the preferred weekday (today
+    // included) until a review is completed on or after it.
+    var t = todayISO().split('-');
+    var today = new Date(Number(t[0]), Number(t[1]) - 1, Number(t[2]));
+    var occurrence = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate() - ((today.getDay() - day + 7) % 7)
+    );
+    var last = new Date(store.getSettings().lastReviewAt);
+    var lastISO = last.getFullYear() + '-' + pad(last.getMonth() + 1) + '-' + pad(last.getDate());
+    var occurrenceISO = occurrence.getFullYear() + '-' + pad(occurrence.getMonth() + 1) + '-' + pad(occurrence.getDate());
+    return lastISO < occurrenceISO;
   }
 
   // "hace 3 días", "hoy", "ayer" — compact Spanish relative day description.
@@ -321,6 +374,13 @@
     upcomingItems: upcomingItems,
     gcalUrl: gcalUrl,
     contextsEnabled: contextsEnabled,
+    referenceEnabled: referenceEnabled,
+    gcalEnabled: gcalEnabled,
+    captureShortcutEnabled: captureShortcutEnabled,
+    timeEstimates: timeEstimates,
+    energyLevels: energyLevels,
+    priorities: priorities,
+    reviewDay: reviewDay,
     focusItems: focusItems,
     canAddFocus: canAddFocus,
     toggleFocus: toggleFocus,

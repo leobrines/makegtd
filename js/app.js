@@ -62,6 +62,13 @@
     return hash || '/hoy';
   }
 
+  // Nav entries hidden by a feature toggle (the Reference list is optional).
+  function visibleNav(items) {
+    return items.filter(function (item) {
+      return item.path !== '/referencia' || model.referenceEnabled();
+    });
+  }
+
   function badgeHTML(kind) {
     if (kind === 'inbox') {
       var count = model.inboxItems().length;
@@ -82,7 +89,7 @@
       '<span class="font-semibold tracking-tight">makeGTD</span>' +
       '</div>';
     html += '<div class="flex-1 space-y-0.5">';
-    NAV_MAIN.forEach(function (item) {
+    visibleNav(NAV_MAIN).forEach(function (item) {
       html += navLink(item, path);
     });
     html += '</div><div class="space-y-0.5 pt-4 border-t border-stone-200 dark:border-stone-800">';
@@ -138,7 +145,7 @@
 
     if (moreOpen) {
       html += '<div id="more-menu" class="border-t border-stone-200 dark:border-stone-800 px-3 py-2">';
-      NAV_MOBILE_MORE.forEach(function (item) {
+      visibleNav(NAV_MOBILE_MORE).forEach(function (item) {
         html += navLink(item, path);
       });
       html += '</div>';
@@ -164,6 +171,7 @@
     }
 
     var renderer = ROUTES[path];
+    if (path === '/referencia' && !model.referenceEnabled()) renderer = null;
     if (!renderer && path.indexOf('/proyectos/') === 0) {
       var projectId = path.slice('/proyectos/'.length);
       renderer = function () { return views.renderProjectDetail(projectId); };
@@ -235,7 +243,7 @@
         return;
       }
       if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.key === 'n' || e.key === 'N') {
+      if ((e.key === 'n' || e.key === 'N') && model.captureShortcutEnabled()) {
         e.preventDefault();
         openCapture();
       }

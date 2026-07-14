@@ -194,7 +194,11 @@
         html += question('Entonces, ¿qué es?');
         html += choice('pz-trash', '🗑️', 'Nada, eliminar', 'No lo necesitas.');
         html += choice('pz-someday', '🌙', 'Algún día / Tal vez', 'Incubar para más adelante.');
-        html += choice('pz-reference', '📚', 'Referencia', 'Información útil para guardar.');
+        // Reference disabled in Settings: the workflow map's third
+        // non-actionable outcome is assumed to live outside the app.
+        if (model.referenceEnabled()) {
+          html += choice('pz-reference', '📚', 'Referencia', 'Información útil para guardar.');
+        }
         html += backLink();
         break;
 
@@ -305,9 +309,11 @@
           '<input type="time" id="pz-schedule-time" class="field mb-3" />' +
           projectSelect(item) +
           '<button type="submit" class="btn-primary w-full">Programar</button>' +
-          '<button type="button" class="btn-secondary w-full mt-2 gap-2" data-action="pz-gcal">' +
-          global.GTD.views.gcalIcon() + '<span>Añadir también a Google Calendar</span>' +
-          '</button>' +
+          (model.gcalEnabled()
+            ? '<button type="button" class="btn-secondary w-full mt-2 gap-2" data-action="pz-gcal">' +
+              global.GTD.views.gcalIcon() + '<span>Añadir también a Google Calendar</span>' +
+              '</button>'
+            : '') +
           '</form>';
         html += backLink();
         break;
