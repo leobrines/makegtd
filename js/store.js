@@ -19,6 +19,9 @@
       settings: {
         lastReviewAt: null,
         focusDate: null,
+        // Contexts are optional in GTD (Setup Guide: a single "Todas" list is
+        // fine); this flag hides the whole feature across the app when false.
+        contextsEnabled: true,
       },
     };
   }

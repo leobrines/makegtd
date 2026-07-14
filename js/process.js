@@ -313,6 +313,16 @@
         break;
 
       case 'next':
+        // With contexts disabled the only question left is the optional
+        // project link (the wizard skips this step entirely when even that
+        // has nothing to offer — see the pz-no-date handler).
+        if (!model.contextsEnabled()) {
+          html += question('¿Es parte de un proyecto?');
+          html += projectSelect(item, 'Proyecto (opcional)');
+          html += '<button type="button" class="btn-primary w-full" data-action="pz-no-context">Guardar en próximas acciones</button>';
+          html += backLink();
+          break;
+        }
         html +=
           '<div class="flex items-start gap-1 mb-4">' +
           '<p class="text-lg font-medium">' + esc('¿Dónde la harás?') + '</p>' +
@@ -483,7 +493,18 @@
     });
 
     $view.on('click', '[data-action="pz-has-date"]', function () { go('schedule'); });
-    $view.on('click', '[data-action="pz-no-date"]', function () { go('next'); });
+    $view.on('click', '[data-action="pz-no-date"]', function () {
+      // Contexts off and no project to offer (multi-step actions already
+      // belong to their new project; with no active projects the select is
+      // empty): nothing left to ask, save straight to Next Actions.
+      if (!model.contextsEnabled() && (pending || !model.activeProjects().length)) {
+        var wasProject = !!pending;
+        commitAction({ status: model.STATUS.NEXT });
+        finishItem(wasProject ? 'Proyecto creado con su primera acción' : 'Añadida a próximas acciones');
+        return;
+      }
+      go('next');
+    });
 
     // Open Google Calendar pre-filled with the chosen date, without leaving the wizard.
     $view.on('click', '[data-action="pz-gcal"]', function () {

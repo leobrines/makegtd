@@ -146,7 +146,7 @@
         html += stepHint('Marca las hechas, elimina las muertas y anota los pasos siguientes que te sugieran.');
         html += actions.length
           ? simpleList(actions, function (item) {
-              return item.context
+              return item.context && model.contextsEnabled()
                 ? '<span class="text-xs text-stone-400 dark:text-stone-500">' + esc(item.context) + '</span>'
                 : '';
             })
