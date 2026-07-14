@@ -180,6 +180,45 @@
     });
   }
 
+  // Incubate a project (Someday/Maybe): it has no current commitment, so its
+  // actionable steps leave the active lists and incubate with it.
+  function incubateProject(id) {
+    store.updateProject(id, { status: 'someday' });
+    store.getItems().forEach(function (item) {
+      if (
+        item.projectId === id &&
+        (item.status === STATUS.NEXT || item.status === STATUS.SCHEDULED)
+      ) {
+        store.updateItem(item.id, { status: STATUS.SOMEDAY, date: null, isFocus: false });
+      }
+    });
+  }
+
+  // Reactivate an incubated project and bring its parked steps back to Next Actions.
+  function activateProject(id) {
+    store.updateProject(id, { status: 'active' });
+    store.getItems().forEach(function (item) {
+      if (item.projectId === id && item.status === STATUS.SOMEDAY) {
+        store.updateItem(item.id, { status: STATUS.NEXT, tickleDate: null });
+      }
+    });
+  }
+
+  // Tickler (workflow map: incubate with a date-specific trigger): someday items
+  // whose reminder date has arrived come back to the inbox to be clarified again.
+  function promoteTickledItems() {
+    var today = todayISO();
+    var changed = false;
+    store.getItems().forEach(function (item) {
+      if (item.status === STATUS.SOMEDAY && item.tickleDate && item.tickleDate <= today) {
+        item.status = STATUS.INBOX;
+        item.tickleDate = null;
+        changed = true;
+      }
+    });
+    if (changed) store.save();
+  }
+
   function completeItem(id) {
     return store.updateItem(id, {
       status: STATUS.DONE,
@@ -249,6 +288,9 @@
     projectItems: projectItems,
     projectHasNextAction: projectHasNextAction,
     stalledProjects: stalledProjects,
+    incubateProject: incubateProject,
+    activateProject: activateProject,
+    promoteTickledItems: promoteTickledItems,
     completeItem: completeItem,
     reopenItem: reopenItem,
     daysSinceReview: daysSinceReview,

@@ -8,8 +8,15 @@
   // Which item row is expanded into its inline editor (progressive disclosure).
   var expandedItemId = null;
 
+  // Escapes for both element and attribute contexts (quotes included: several
+  // templates interpolate into value="…").
   function esc(text) {
-    return $('<span>').text(text == null ? '' : String(text)).html();
+    return String(text == null ? '' : text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   function refresh() {
@@ -67,6 +74,9 @@
     }
     if (item.status === model.STATUS.WAITING && item.waitingFor) {
       bits.push('<span>' + esc(item.waitingFor) + '</span>');
+    }
+    if (item.status === model.STATUS.SOMEDAY && item.tickleDate) {
+      bits.push('<span>Vuelve el ' + esc(model.formatDate(item.tickleDate)) + '</span>');
     }
     if (!bits.length) return '';
     return '<div class="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-stone-400 dark:text-stone-500 mt-0.5">' + bits.join('') + '</div>';
@@ -334,7 +344,8 @@
     var html =
       '<a href="#/proyectos" class="text-sm text-stone-400 dark:text-stone-500 hover:text-accent transition-colors duration-150">‹ Proyectos</a>' +
       '<header class="mt-2 mb-6">' +
-      '<h1 class="text-2xl font-semibold tracking-tight">' + esc(project.name) + '</h1>' +
+      '<input type="text" id="project-name" class="w-full text-2xl font-semibold tracking-tight bg-transparent outline-none" ' +
+      'value="' + esc(project.name) + '" data-project-id="' + project.id + '" aria-label="Nombre del proyecto" />' +
       '<input type="text" id="project-outcome" class="w-full mt-1 text-sm bg-transparent outline-none text-stone-500 dark:text-stone-400 placeholder-stone-400 dark:placeholder-stone-600" ' +
       'placeholder="¿Cómo sabrás que está terminado?" value="' + esc(project.outcome || '') + '" data-project-id="' + project.id + '" />' +
       '</header>';
@@ -363,8 +374,9 @@
     }
 
     html +=
-      '<div class="mt-10 flex gap-2">' +
+      '<div class="mt-10 flex flex-wrap gap-2">' +
       '<button type="button" class="btn-secondary" data-action="complete-project" data-id="' + project.id + '">Completar proyecto</button>' +
+      '<button type="button" class="btn-secondary" data-action="incubate-project" data-id="' + project.id + '">Mover a «Algún día»</button>' +
       '<button type="button" class="btn-ghost text-red-500 dark:text-red-400" data-action="delete-project" data-id="' + project.id + '">Eliminar</button>' +
       '</div>';
     return html;
@@ -521,6 +533,7 @@
       if (fields.status === model.STATUS.SCHEDULED && !fields.date) fields.status = model.STATUS.NEXT;
       if (fields.status !== model.STATUS.SCHEDULED) fields.date = null;
       if (fields.status !== model.STATUS.WAITING) fields.waitingFor = null;
+      if (fields.status !== model.STATUS.SOMEDAY) fields.tickleDate = null;
       store.updateItem(id, fields);
       expandedItemId = null;
       toast('Guardado');
@@ -588,14 +601,39 @@
       $('#project-item-input').trigger('focus');
     });
 
+    $view.on('change', '#project-name', function () {
+      var id = $(this).data('project-id');
+      var name = $(this).val().trim();
+      if (!name) {
+        $(this).val(store.getProject(id).name);
+        return;
+      }
+      store.updateProject(id, { name: name });
+      toast('Guardado');
+    });
+
     $view.on('change', '#project-outcome', function () {
       store.updateProject($(this).data('project-id'), { outcome: $(this).val().trim() });
       toast('Guardado');
     });
 
     $view.on('click', '[data-action="complete-project"]', function () {
-      store.updateProject($(this).data('id'), { status: 'done' });
+      var id = $(this).data('id');
+      var open = model.projectItems(id).filter(function (i) { return i.status !== model.STATUS.DONE; });
+      if (open.length) {
+        var msg = open.length === 1
+          ? 'Este proyecto tiene 1 acción pendiente. ¿Completarlo igualmente? La acción seguirá en tus listas.'
+          : 'Este proyecto tiene ' + open.length + ' acciones pendientes. ¿Completarlo igualmente? Las acciones seguirán en tus listas.';
+        if (!global.confirm(msg)) return;
+      }
+      store.updateProject(id, { status: 'done' });
       toast('Proyecto completado 🎉');
+      location.hash = '#/proyectos';
+    });
+
+    $view.on('click', '[data-action="incubate-project"]', function () {
+      model.incubateProject($(this).data('id'));
+      toast('Proyecto incubando en «Algún día»');
       location.hash = '#/proyectos';
     });
 
@@ -607,12 +645,12 @@
 
     // Someday: activate.
     $view.on('click', '[data-action="activate"]', function () {
-      store.updateItem($(this).data('id'), { status: model.STATUS.NEXT });
+      store.updateItem($(this).data('id'), { status: model.STATUS.NEXT, tickleDate: null });
       toast('Movida a próximas acciones');
       refresh();
     });
     $view.on('click', '[data-action="activate-project"]', function () {
-      store.updateProject($(this).data('id'), { status: 'active' });
+      model.activateProject($(this).data('id'));
       toast('Proyecto activado');
       refresh();
     });
