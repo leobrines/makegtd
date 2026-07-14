@@ -1,0 +1,259 @@
+/* Domain constants and pure helpers. UI strings here are Spanish (user-facing). */
+(function (global) {
+  'use strict';
+
+  var store = global.GTD.store;
+
+  var STATUS = {
+    INBOX: 'inbox',
+    NEXT: 'next',
+    WAITING: 'waiting',
+    SCHEDULED: 'scheduled',
+    SOMEDAY: 'someday',
+    REFERENCE: 'reference',
+    DONE: 'done',
+  };
+
+  var STATUS_LABELS = {
+    inbox: 'Bandeja de entrada',
+    next: 'Próxima acción',
+    waiting: 'A la espera',
+    scheduled: 'Programada',
+    someday: 'Algún día',
+    reference: 'Referencia',
+    done: 'Hecha',
+  };
+
+  var FOCUS_LIMIT = 3;
+  var REVIEW_INTERVAL_DAYS = 7;
+
+  // Local date as YYYY-MM-DD (never UTC, to avoid off-by-one around midnight).
+  function todayISO() {
+    var d = new Date();
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+
+  function pad(n) {
+    return n < 10 ? '0' + n : String(n);
+  }
+
+  function byStatus(status) {
+    return store.getItems().filter(function (item) {
+      return item.status === status;
+    });
+  }
+
+  function inboxItems() {
+    return byStatus(STATUS.INBOX);
+  }
+
+  function nextActions() {
+    return byStatus(STATUS.NEXT);
+  }
+
+  function waitingItems() {
+    return byStatus(STATUS.WAITING);
+  }
+
+  function scheduledItems() {
+    return byStatus(STATUS.SCHEDULED).sort(function (a, b) {
+      return (a.date || '') < (b.date || '') ? -1 : 1;
+    });
+  }
+
+  function somedayItems() {
+    return byStatus(STATUS.SOMEDAY);
+  }
+
+  function referenceItems() {
+    return byStatus(STATUS.REFERENCE);
+  }
+
+  function doneItems() {
+    return byStatus(STATUS.DONE).sort(function (a, b) {
+      return (a.completedAt || '') > (b.completedAt || '') ? -1 : 1;
+    });
+  }
+
+  function overdueItems() {
+    var today = todayISO();
+    return scheduledItems().filter(function (item) {
+      return item.date && item.date < today;
+    });
+  }
+
+  function dueTodayItems() {
+    var today = todayISO();
+    return scheduledItems().filter(function (item) {
+      return item.date === today;
+    });
+  }
+
+  function upcomingItems() {
+    var today = todayISO();
+    return scheduledItems().filter(function (item) {
+      return item.date && item.date > today;
+    });
+  }
+
+  // Google Calendar "add event" URL (all-day event; end date is exclusive).
+  // Format per https://github.com/InteractionDesignFoundation/add-event-to-calendar-docs
+  function gcalUrl(item) {
+    var date = (item.date || todayISO()).slice(0, 10);
+    var parts = date.split('-');
+    var end = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]) + 1);
+    var endStr = end.getFullYear() + pad(end.getMonth() + 1) + pad(end.getDate());
+    var url =
+      'https://calendar.google.com/calendar/render?action=TEMPLATE' +
+      '&text=' + encodeURIComponent(item.title || '') +
+      '&dates=' + date.replace(/-/g, '') + '/' + endStr;
+    if (item.notes) url += '&details=' + encodeURIComponent(item.notes);
+    return url;
+  }
+
+  // Focus tasks are reset each day: settings.focusDate marks the day they belong to.
+  function ensureFocusIsCurrent() {
+    var settings = store.getSettings();
+    var today = todayISO();
+    if (settings.focusDate !== today) {
+      store.getItems().forEach(function (item) {
+        if (item.isFocus) item.isFocus = false;
+      });
+      store.updateSettings({ focusDate: today });
+    }
+  }
+
+  function focusItems() {
+    ensureFocusIsCurrent();
+    return store.getItems().filter(function (item) {
+      return item.isFocus && item.status !== STATUS.DONE;
+    });
+  }
+
+  function canAddFocus() {
+    return focusItems().length < FOCUS_LIMIT;
+  }
+
+  function toggleFocus(id) {
+    var item = store.getItem(id);
+    if (!item) return false;
+    if (item.isFocus) {
+      store.updateItem(id, { isFocus: false });
+      return true;
+    }
+    if (!canAddFocus()) return false;
+    store.updateItem(id, { isFocus: true });
+    return true;
+  }
+
+  function activeProjects() {
+    return store.getProjects().filter(function (p) {
+      return p.status === 'active';
+    });
+  }
+
+  function somedayProjects() {
+    return store.getProjects().filter(function (p) {
+      return p.status === 'someday';
+    });
+  }
+
+  function projectItems(projectId) {
+    return store.getItems().filter(function (item) {
+      return item.projectId === projectId;
+    });
+  }
+
+  // A healthy active project has at least one actionable step (next or scheduled).
+  function projectHasNextAction(projectId) {
+    return store.getItems().some(function (item) {
+      return (
+        item.projectId === projectId &&
+        (item.status === STATUS.NEXT || item.status === STATUS.SCHEDULED || item.status === STATUS.WAITING)
+      );
+    });
+  }
+
+  function stalledProjects() {
+    return activeProjects().filter(function (p) {
+      return !projectHasNextAction(p.id);
+    });
+  }
+
+  function completeItem(id) {
+    return store.updateItem(id, {
+      status: STATUS.DONE,
+      isFocus: false,
+      completedAt: new Date().toISOString(),
+    });
+  }
+
+  function reopenItem(id) {
+    return store.updateItem(id, { status: STATUS.NEXT, completedAt: null });
+  }
+
+  function daysSinceReview() {
+    var last = store.getSettings().lastReviewAt;
+    if (!last) return null;
+    var ms = Date.now() - new Date(last).getTime();
+    return Math.floor(ms / (24 * 60 * 60 * 1000));
+  }
+
+  function reviewIsDue() {
+    var days = daysSinceReview();
+    return days === null || days >= REVIEW_INTERVAL_DAYS;
+  }
+
+  // "hace 3 días", "hoy", "ayer" — compact Spanish relative day description.
+  function relativeDays(isoDate) {
+    if (!isoDate) return '';
+    var today = todayISO();
+    if (isoDate === today) return 'hoy';
+    var diff = Math.round(
+      (new Date(today + 'T00:00:00') - new Date(isoDate.slice(0, 10) + 'T00:00:00')) / (24 * 60 * 60 * 1000)
+    );
+    if (diff === 1) return 'ayer';
+    if (diff === -1) return 'mañana';
+    if (diff > 1) return 'hace ' + diff + ' días';
+    return 'en ' + Math.abs(diff) + ' días';
+  }
+
+  function formatDate(isoDate) {
+    if (!isoDate) return '';
+    var parts = isoDate.slice(0, 10).split('-');
+    var d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    return d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
+  }
+
+  global.GTD.model = {
+    STATUS: STATUS,
+    STATUS_LABELS: STATUS_LABELS,
+    FOCUS_LIMIT: FOCUS_LIMIT,
+    todayISO: todayISO,
+    inboxItems: inboxItems,
+    nextActions: nextActions,
+    waitingItems: waitingItems,
+    scheduledItems: scheduledItems,
+    somedayItems: somedayItems,
+    referenceItems: referenceItems,
+    doneItems: doneItems,
+    overdueItems: overdueItems,
+    dueTodayItems: dueTodayItems,
+    upcomingItems: upcomingItems,
+    gcalUrl: gcalUrl,
+    focusItems: focusItems,
+    canAddFocus: canAddFocus,
+    toggleFocus: toggleFocus,
+    activeProjects: activeProjects,
+    somedayProjects: somedayProjects,
+    projectItems: projectItems,
+    projectHasNextAction: projectHasNextAction,
+    stalledProjects: stalledProjects,
+    completeItem: completeItem,
+    reopenItem: reopenItem,
+    daysSinceReview: daysSinceReview,
+    reviewIsDue: reviewIsDue,
+    relativeDays: relativeDays,
+    formatDate: formatDate,
+  };
+})(window);
