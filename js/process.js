@@ -90,7 +90,9 @@
     if (pending) {
       var project = store.addProject({ name: pending.projectName, outcome: pending.projectOutcome });
       store.addItem(Object.assign({ title: pending.actionTitle, projectId: project.id }, fields));
-      store.removeItem(itemId);
+      // The inbox item was transformed into the project, not deleted by the
+      // user, so it skips the trash (a copy there would be a confusing duplicate).
+      store.destroyItem(itemId);
     } else {
       store.updateItem(itemId, Object.assign({ projectId: selectedProjectId(item) }, fields));
     }
@@ -315,7 +317,7 @@
 
     $view.on('click', '[data-action="pz-trash"]', function () {
       store.removeItem(itemId);
-      finishItem('Eliminada. Una cosa menos.');
+      finishItem('A la papelera. Una cosa menos.');
     });
 
     $view.on('click', '[data-action="pz-someday"]', function () { go('incubate'); });
