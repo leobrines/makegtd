@@ -148,6 +148,9 @@
   function render() {
     var path = currentPath();
 
+    // Tickler: incubated items whose reminder date has arrived return to the inbox.
+    model.promoteTickledItems();
+
     // Route-change housekeeping.
     if (path !== lastPath) {
       views.collapseEditor();

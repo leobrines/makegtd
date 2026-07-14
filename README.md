@@ -8,12 +8,12 @@ No backend, no framework: vanilla JavaScript + jQuery, Tailwind CSS compiled to 
 
 - **Hoy** — overdue and due-today items, plus a daily focus list deliberately capped at 3 tasks.
 - **Bandeja de entrada** — zero-friction capture: floating "+" button and the `n` shortcut from any view, with chained captures.
-- **Procesar** — a guided Clarify wizard that walks the GTD decision tree one question at a time (delete / someday / reference / 2-minute rule / delegate / schedule / next action / convert to project).
+- **Procesar** — a guided Clarify wizard that follows the official GTD workflow map one question at a time: delete / incubate (someday, optionally with a tickler date) / reference; single-step vs. project (desired outcome + first action); 2-minute rule / delegate / schedule / next action, with optional linking to an existing project.
 - **Próximas acciones** — filterable by context (`@casa`, `@llamadas`, …).
 - **Agenda** — everything with a date: overdue, today, and upcoming.
 - **Proyectos** — with an alert whenever an active project has no next action.
 - **A la espera**, **Algún día / Tal vez**, **Referencia**.
-- **Revisión semanal** — a guided 7-step wizard mirroring the official [GTD Weekly Review® checklist](https://gettingthingsdone.com/wp-content/uploads/2014/10/Weekly_Review_Checklist.pdf).
+- **Revisión semanal** — a guided wizard mirroring the official [GTD Weekly Review® checklist](https://gettingthingsdone.com/wp-content/uploads/2016/04/GTD-WeeklyReview.pdf): 11 steps in 3 phases (Get Clear, Get Current, Get Creative).
 - **Ajustes** — manage contexts, JSON export/import backup, wipe data.
 
 ## Add to Google Calendar
