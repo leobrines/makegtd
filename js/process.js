@@ -179,9 +179,7 @@
           '<div class="mb-4">' +
           '<div class="flex items-start gap-1">' +
           '<p class="text-lg font-medium">' + esc('¿Es accionable?') + '</p>' +
-          '<button type="button" class="w-11 h-11 -my-2 shrink-0 flex items-center justify-center" data-action="pz-help-actionable" aria-label="¿Qué es un accionable?" aria-haspopup="dialog">' +
-          '<span class="w-5 h-5 rounded-full border border-stone-300 dark:border-stone-600 text-xs font-semibold text-stone-400 dark:text-stone-500 flex items-center justify-center" aria-hidden="true">!</span>' +
-          '</button>' +
+          global.GTD.views.helpIcon('pz-help-actionable', '¿Qué es un accionable?') +
           '</div>' +
           '<p class="text-sm text-stone-500 dark:text-stone-400">' + esc('¿Te comprometes a hacer algo ahora?') + '</p>' +
           '</div>';
@@ -302,7 +300,11 @@
         break;
 
       case 'next':
-        html += question('¿Dónde la harás?');
+        html +=
+          '<div class="flex items-start gap-1 mb-4">' +
+          '<p class="text-lg font-medium">' + esc('¿Dónde la harás?') + '</p>' +
+          global.GTD.views.helpIcon('help-context', '¿Qué es un contexto?') +
+          '</div>';
         html += projectSelect(item);
         html += '<div class="flex flex-wrap gap-2 mb-4">';
         store.getContexts().forEach(function (c) {

@@ -52,9 +52,19 @@
 
   function sectionTitle(text, extra) {
     return (
-      '<h2 class="text-xs font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500 mt-8 mb-2 px-1">' +
+      '<h2 class="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500 mt-8 mb-2 px-1">' +
       esc(text) + (extra || '') +
       '</h2>'
+    );
+  }
+
+  // Small "?" button that opens a help dialog (shared by the Clarify wizard and Settings).
+  function helpIcon(action, label) {
+    return (
+      '<button type="button" class="w-11 h-11 -my-2 shrink-0 inline-flex items-center justify-center" ' +
+      'data-action="' + action + '" aria-label="' + esc(label) + '" aria-haspopup="dialog">' +
+      '<span class="w-5 h-5 rounded-full border border-stone-300 dark:border-stone-600 text-xs font-semibold text-stone-400 dark:text-stone-500 flex items-center justify-center" aria-hidden="true">?</span>' +
+      '</button>'
     );
   }
 
@@ -514,7 +524,7 @@
     var contexts = store.getContexts();
     var html = header('Ajustes');
 
-    html += sectionTitle('Contextos');
+    html += sectionTitle('Contextos', helpIcon('help-context', '¿Qué es un contexto?'));
     html += '<div class="card px-4 py-4">';
     html += '<ul class="mb-3">' + contexts.map(function (c) {
       return (
@@ -636,6 +646,25 @@
     $view.on('click', '[data-action="filter-context"]', function () {
       currentContextFilter = $(this).data('context') || '';
       refresh();
+    });
+
+    // Help popup: what a "context" is (triggers live in Settings and the Clarify wizard).
+    function closeContextHelp() {
+      $('#context-help-overlay').addClass('hidden').attr('aria-hidden', 'true');
+    }
+
+    $view.on('click', '[data-action="help-context"]', function () {
+      $('#context-help-overlay').removeClass('hidden').attr('aria-hidden', 'false');
+    });
+
+    $('#context-help-overlay').on('click', function (e) {
+      if (e.target === this) closeContextHelp();
+    });
+
+    $('#context-help-close, #context-help-ok').on('click', closeContextHelp);
+
+    $(document).on('keydown', function (e) {
+      if (e.key === 'Escape') closeContextHelp();
     });
 
     // Projects.
@@ -792,6 +821,7 @@
     renderProjects: renderProjects,
     renderProjectDetail: renderProjectDetail,
     gcalIcon: gcalIcon,
+    helpIcon: helpIcon,
     renderWaiting: renderWaiting,
     renderSomeday: renderSomeday,
     renderReference: renderReference,
