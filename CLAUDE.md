@@ -47,7 +47,7 @@ A single `Item` entity flows through the whole GTD pipeline by changing `status`
 
 - Bump `CACHE_VERSION` in `sw.js` whenever any precached asset changes, or users will keep the stale version.
 - Keep `css/styles.css` in sync: if a change adds/removes Tailwind classes, run `npm run build:css` and commit the result.
-- No new runtime dependencies. No CDN URLs anywhere.
+- No new runtime dependencies. No CDN URLs anywhere. Sole exception: the optional, user-initiated "add to Google Calendar" buttons open an external `calendar.google.com/calendar/render?action=TEMPLATE` URL in a new tab (no assets are fetched; the app itself stays fully offline).
 - Dates are stored as ISO strings; day-level comparisons use local dates (`YYYY-MM-DD`), not UTC.
 
 ## UI/UX principles (minimalist, ADHD-friendly)

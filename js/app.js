@@ -11,6 +11,7 @@
     '/entrada': function () { return views.renderInbox(); },
     '/procesar': function () { return global.GTD.process.render(); },
     '/siguientes': function () { return views.renderNext(); },
+    '/agenda': function () { return views.renderAgenda(); },
     '/proyectos': function () { return views.renderProjects(); },
     '/espera': function () { return views.renderWaiting(); },
     '/algundia': function () { return views.renderSomeday(); },
@@ -24,6 +25,7 @@
     { path: '/entrada', icon: '📥', label: 'Bandeja de entrada', badge: 'inbox' },
     { path: '/procesar', icon: '⚡', label: 'Procesar' },
     { path: '/siguientes', icon: '📋', label: 'Próximas acciones' },
+    { path: '/agenda', icon: '📅', label: 'Agenda' },
     { path: '/proyectos', icon: '🗂️', label: 'Proyectos' },
     { path: '/espera', icon: '📮', label: 'A la espera' },
     { path: '/algundia', icon: '🌙', label: 'Algún día' },
@@ -44,6 +46,7 @@
 
   var NAV_MOBILE_MORE = [
     { path: '/procesar', icon: '⚡', label: 'Procesar' },
+    { path: '/agenda', icon: '📅', label: 'Agenda' },
     { path: '/espera', icon: '📮', label: 'A la espera' },
     { path: '/algundia', icon: '🌙', label: 'Algún día' },
     { path: '/referencia', icon: '📚', label: 'Referencia' },

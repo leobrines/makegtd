@@ -1,0 +1,43 @@
+# makeGTD
+
+An installable, offline-first PWA implementing the full [Getting Things Done®](https://gettingthingsdone.com/) workflow end to end — Capture → Clarify → Organize → Reflect → Engage — with a minimalist, ADHD-friendly Spanish UI.
+
+No backend, no framework: vanilla JavaScript + jQuery, Tailwind CSS compiled to a static stylesheet, and `localStorage` for persistence. Everything runs in the browser and works fully offline once installed.
+
+## Features
+
+- **Hoy** — overdue and due-today items, plus a daily focus list deliberately capped at 3 tasks.
+- **Bandeja de entrada** — zero-friction capture: floating "+" button and the `n` shortcut from any view, with chained captures.
+- **Procesar** — a guided Clarify wizard that walks the GTD decision tree one question at a time (delete / someday / reference / 2-minute rule / delegate / schedule / next action / convert to project).
+- **Próximas acciones** — filterable by context (`@casa`, `@llamadas`, …).
+- **Agenda** — everything with a date: overdue, today, and upcoming.
+- **Proyectos** — with an alert whenever an active project has no next action.
+- **A la espera**, **Algún día / Tal vez**, **Referencia**.
+- **Revisión semanal** — a guided 7-step wizard mirroring the official [GTD Weekly Review® checklist](https://gettingthingsdone.com/wp-content/uploads/2014/10/Weekly_Review_Checklist.pdf).
+- **Ajustes** — manage contexts, JSON export/import backup, wipe data.
+
+## Add to Google Calendar
+
+Scheduled items offer an optional "add to Google Calendar" button (in the Agenda list, the item editor, and the scheduling step of the Clarify wizard). It opens Google Calendar's event template URL pre-filled with the task's title, date, and notes — no API, no account linking, no data leaves the device unless you click it.
+
+URL format based on the excellent [add-event-to-calendar-docs](https://github.com/InteractionDesignFoundation/add-event-to-calendar-docs):
+
+```
+https://calendar.google.com/calendar/render?action=TEMPLATE&text=TITLE&dates=YYYYMMDD/YYYYMMDD&details=NOTES
+```
+
+## Development
+
+```bash
+npm install                    # once, installs tailwindcss (dev-only)
+npm run build:css              # regenerate css/styles.css after changing Tailwind classes
+python3 -m http.server 8080    # serve locally (service workers need http://localhost)
+```
+
+Then open `http://localhost:8080`. The compiled `css/styles.css` is committed, so the app also runs as plain static files without any build step.
+
+## Notes
+
+- All data stays in `localStorage` on the device (single versioned key `gtd:data:v1`). Use Ajustes → Exportar for backups.
+- Bump `CACHE_VERSION` in `sw.js` whenever a precached asset changes.
+- Code, comments, and commits are in English; all user-facing UI text is in Spanish (see `CLAUDE.md`).

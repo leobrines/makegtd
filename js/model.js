@@ -89,6 +89,28 @@
     });
   }
 
+  function upcomingItems() {
+    var today = todayISO();
+    return scheduledItems().filter(function (item) {
+      return item.date && item.date > today;
+    });
+  }
+
+  // Google Calendar "add event" URL (all-day event; end date is exclusive).
+  // Format per https://github.com/InteractionDesignFoundation/add-event-to-calendar-docs
+  function gcalUrl(item) {
+    var date = (item.date || todayISO()).slice(0, 10);
+    var parts = date.split('-');
+    var end = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]) + 1);
+    var endStr = end.getFullYear() + pad(end.getMonth() + 1) + pad(end.getDate());
+    var url =
+      'https://calendar.google.com/calendar/render?action=TEMPLATE' +
+      '&text=' + encodeURIComponent(item.title || '') +
+      '&dates=' + date.replace(/-/g, '') + '/' + endStr;
+    if (item.notes) url += '&details=' + encodeURIComponent(item.notes);
+    return url;
+  }
+
   // Focus tasks are reset each day: settings.focusDate marks the day they belong to.
   function ensureFocusIsCurrent() {
     var settings = store.getSettings();
@@ -217,6 +239,8 @@
     doneItems: doneItems,
     overdueItems: overdueItems,
     dueTodayItems: dueTodayItems,
+    upcomingItems: upcomingItems,
+    gcalUrl: gcalUrl,
     focusItems: focusItems,
     canAddFocus: canAddFocus,
     toggleFocus: toggleFocus,

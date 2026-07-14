@@ -143,6 +143,9 @@
           '<form id="pz-schedule-form">' +
           '<input type="date" id="pz-schedule-input" class="field mb-3" min="' + model.todayISO() + '" value="' + model.todayISO() + '" />' +
           '<button type="submit" class="btn-primary w-full">Programar</button>' +
+          '<button type="button" class="btn-secondary w-full mt-2 gap-2" data-action="pz-gcal">' +
+          global.GTD.views.gcalIcon() + '<span>Añadir también a Google Calendar</span>' +
+          '</button>' +
           '</form>';
         html += backLink();
         break;
@@ -239,6 +242,14 @@
 
     $view.on('click', '[data-action="pz-has-date"]', function () { go('schedule'); });
     $view.on('click', '[data-action="pz-no-date"]', function () { go('next'); });
+
+    // Open Google Calendar pre-filled with the chosen date, without leaving the wizard.
+    $view.on('click', '[data-action="pz-gcal"]', function () {
+      var item = store.getItem(itemId);
+      var date = $('#pz-schedule-input').val() || model.todayISO();
+      if (!item) return;
+      global.open(model.gcalUrl({ title: item.title, notes: item.notes, date: date }), '_blank', 'noopener');
+    });
 
     $view.on('submit', '#pz-schedule-form', function (e) {
       e.preventDefault();

@@ -97,6 +97,32 @@
     return row;
   }
 
+  // Simplified Google Calendar mark, inline (the PWA loads no external assets).
+  function gcalIcon() {
+    return (
+      '<svg viewBox="0 0 48 48" width="18" height="18" aria-hidden="true">' +
+      '<rect x="8" y="8" width="32" height="32" fill="#fff" stroke="#e0e0e0" stroke-width="1"/>' +
+      '<rect x="8" y="8" width="32" height="7" fill="#4285F4"/>' +
+      '<rect x="8" y="15" width="7" height="25" fill="#4285F4"/>' +
+      '<rect x="33" y="15" width="7" height="19" fill="#FBBC04"/>' +
+      '<rect x="15" y="33" width="18" height="7" fill="#34A853"/>' +
+      '<path d="M40 34l-7 6h7z" fill="#EA4335"/>' +
+      '<text x="24" y="30" font-size="13" font-weight="bold" fill="#4285F4" text-anchor="middle" font-family="sans-serif">31</text>' +
+      '</svg>'
+    );
+  }
+
+  // Anchor that pre-fills the event in Google Calendar (opens a new tab; needs network).
+  function gcalLink(item, withLabel) {
+    return (
+      '<a href="' + esc(model.gcalUrl(item)) + '" target="_blank" rel="noopener noreferrer" ' +
+      'class="btn-ghost shrink-0 gap-2" aria-label="Añadir a Google Calendar">' +
+      gcalIcon() +
+      (withLabel ? '<span class="text-sm">Google Calendar</span>' : '') +
+      '</a>'
+    );
+  }
+
   function contextOptions(selected) {
     var html = '<option value="">Sin contexto</option>';
     store.getContexts().forEach(function (c) {
@@ -137,8 +163,9 @@
       '</div>' +
       '<input type="text" class="field" data-field="waitingFor" value="' + esc(item.waitingFor || '') + '" placeholder="¿De quién esperas respuesta?" aria-label="A la espera de" ' +
       (item.status === model.STATUS.WAITING ? '' : 'style="display:none"') + ' />' +
-      '<div class="flex items-center justify-between pt-1">' +
+      '<div class="flex items-center justify-between gap-2 pt-1">' +
       '<button type="button" class="btn-ghost text-red-500 dark:text-red-400" data-action="delete" data-id="' + item.id + '">Eliminar</button>' +
+      (item.status === model.STATUS.SCHEDULED && item.date ? gcalLink(item, false) : '') +
       '<button type="button" class="btn-primary" data-action="save-item" data-id="' + item.id + '">Guardar</button>' +
       '</div>' +
       '</div>'
@@ -340,6 +367,37 @@
       '<button type="button" class="btn-secondary" data-action="complete-project" data-id="' + project.id + '">Completar proyecto</button>' +
       '<button type="button" class="btn-ghost text-red-500 dark:text-red-400" data-action="delete-project" data-id="' + project.id + '">Eliminar</button>' +
       '</div>';
+    return html;
+  }
+
+  function renderAgenda() {
+    var overdue = model.overdueItems();
+    var dueToday = model.dueTodayItems();
+    var upcoming = model.upcomingItems();
+    var html = header('Agenda', 'Solo lo que tiene fecha. Lo demás vive en tus listas.');
+
+    if (!overdue.length && !dueToday.length && !upcoming.length) {
+      return html + emptyState('🗓️', 'Nada en el calendario. El futuro puede esperar.');
+    }
+
+    function agendaList(items) {
+      return '<ul>' + items.map(function (item) {
+        return itemRow(item, { trailing: gcalLink(item, false) });
+      }).join('') + '</ul>';
+    }
+
+    if (overdue.length) {
+      html += sectionTitle('Vencidas');
+      html += agendaList(overdue);
+    }
+    if (dueToday.length) {
+      html += sectionTitle('Hoy');
+      html += agendaList(dueToday);
+    }
+    if (upcoming.length) {
+      html += sectionTitle('Próximamente');
+      html += agendaList(upcoming);
+    }
     return html;
   }
 
@@ -617,8 +675,10 @@
     renderNext: function () {
       return renderNext(currentContextFilter);
     },
+    renderAgenda: renderAgenda,
     renderProjects: renderProjects,
     renderProjectDetail: renderProjectDetail,
+    gcalIcon: gcalIcon,
     renderWaiting: renderWaiting,
     renderSomeday: renderSomeday,
     renderReference: renderReference,
