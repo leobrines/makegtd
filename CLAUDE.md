@@ -11,6 +11,28 @@ Guidance for Claude Code when working in this repository.
 
 **makegtd** is an installable, offline-first PWA implementing the full GTD (Getting Things Done) workflow end to end: Capture → Clarify → Organize → Reflect → Engage. There is no backend and no framework: everything runs in the browser and persists to `localStorage`.
 
+## Canonical GTD sources — always consult before changing GTD behavior
+
+The official David Allen Company PDFs live in `docs/gtd/` (see `docs/gtd/README.md` for
+summaries and source URLs). **Any change that touches GTD behavior — statuses, views,
+the Clarify wizard, the weekly review, lists, calendar/scheduling logic — must be
+grounded in these documents. Consult them explicitly and cite the relevant document
+(and rule) in the commit/PR description:**
+
+- `docs/gtd/gtd-workflow-map.pdf` — the official workflow map: the five steps and the
+  Clarify/Organize decision tree (actionable? → do/delegate/defer; not actionable? →
+  trash/incubate/reference; multi-step → project).
+- `docs/gtd/gtd-weekly-review-checklist.pdf` — the official GTD Weekly Review®
+  checklist: 11 steps in 3 phases (Get Clear, Get Current, Get Creative). `js/review.js`
+  must follow it.
+- `docs/gtd/gtd-setup-guide-paper-sample.pdf` — the official Setup Guide sample: the
+  canonical system sections (In, Calendar, Next Actions by context, Projects,
+  Someday/Maybe, Reference…), the calendar rule (only day/time-specific actions go on
+  the calendar), and the rule that every project needs at least one next action.
+
+If a requested change contradicts these documents, flag the conflict instead of
+silently implementing it.
+
 ## Stack
 
 - Vanilla JavaScript (classic `<script>` tags, no bundler, no modules) + jQuery (vendored at `js/vendor/jquery.min.js` — never load it from a CDN).
