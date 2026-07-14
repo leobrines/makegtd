@@ -128,7 +128,7 @@
           '<span class="w-5 h-5 rounded-full border border-stone-300 dark:border-stone-600 text-xs font-semibold text-stone-400 dark:text-stone-500 flex items-center justify-center" aria-hidden="true">!</span>' +
           '</button>' +
           '</div>' +
-          '<p class="text-sm text-stone-500 dark:text-stone-400">' + esc('Es decir: ¿te comprometes a hacer algo ahora?') + '</p>' +
+          '<p class="text-sm text-stone-500 dark:text-stone-400">' + esc('¿Te comprometes a hacer algo ahora?') + '</p>' +
           '</div>';
         html += choice('pz-yes-actionable', '⚡', 'Sí, hay que actuar');
         html += choice('pz-no-actionable', '🍃', 'No, por ahora no');
