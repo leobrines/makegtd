@@ -154,6 +154,7 @@
     // Route-change housekeeping.
     if (path !== lastPath) {
       views.collapseEditor();
+      if (lastPath === '/procesar') global.GTD.process.onRouteLeave();
       if (path === '/revision' && global.GTD.review.isFinished()) global.GTD.review.reset();
       if (lastPath !== null) $('#view').scrollTop && window.scrollTo(0, 0);
       lastPath = path;
