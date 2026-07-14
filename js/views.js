@@ -122,17 +122,6 @@
     );
   }
 
-  // Anchor that pre-fills the event in Google Calendar (opens a new tab; needs network).
-  function gcalLink(item, withLabel) {
-    return (
-      '<a href="' + esc(model.gcalUrl(item)) + '" target="_blank" rel="noopener noreferrer" ' +
-      'class="btn-ghost shrink-0 gap-2" aria-label="Añadir a Google Calendar">' +
-      gcalIcon() +
-      (withLabel ? '<span class="text-sm">Google Calendar</span>' : '') +
-      '</a>'
-    );
-  }
-
   function contextOptions(selected) {
     var html = '<option value="">Sin contexto</option>';
     store.getContexts().forEach(function (c) {
@@ -175,7 +164,6 @@
       (item.status === model.STATUS.WAITING ? '' : 'style="display:none"') + ' />' +
       '<div class="flex items-center justify-between gap-2 pt-1">' +
       '<button type="button" class="btn-ghost text-red-500 dark:text-red-400" data-action="delete" data-id="' + item.id + '">Eliminar</button>' +
-      (item.status === model.STATUS.SCHEDULED && item.date ? gcalLink(item, false) : '') +
       '<button type="button" class="btn-primary" data-action="save-item" data-id="' + item.id + '">Guardar</button>' +
       '</div>' +
       '</div>'
@@ -392,23 +380,17 @@
       return html + emptyState('🗓️', 'Nada en el calendario. El futuro puede esperar.');
     }
 
-    function agendaList(items) {
-      return '<ul>' + items.map(function (item) {
-        return itemRow(item, { trailing: gcalLink(item, false) });
-      }).join('') + '</ul>';
-    }
-
     if (overdue.length) {
       html += sectionTitle('Vencidas');
-      html += agendaList(overdue);
+      html += list(overdue);
     }
     if (dueToday.length) {
       html += sectionTitle('Hoy');
-      html += agendaList(dueToday);
+      html += list(dueToday);
     }
     if (upcoming.length) {
       html += sectionTitle('Próximamente');
-      html += agendaList(upcoming);
+      html += list(upcoming);
     }
     return html;
   }

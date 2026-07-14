@@ -18,7 +18,7 @@ No backend, no framework: vanilla JavaScript + jQuery, Tailwind CSS compiled to 
 
 ## Add to Google Calendar
 
-Scheduled items offer an optional "add to Google Calendar" button (in the Agenda list, the item editor, and the scheduling step of the Clarify wizard). It opens Google Calendar's event template URL pre-filled with the task's title, date, and notes — no API, no account linking, no data leaves the device unless you click it.
+When scheduling an item in the Clarify wizard, an optional "add to Google Calendar" button is offered (only at that moment — it does not appear in the Agenda list or the item editor). It opens Google Calendar's event template URL pre-filled with the task's title, date, and notes — no API, no account linking, no data leaves the device unless you click it.
 
 URL format based on the excellent [add-event-to-calendar-docs](https://github.com/InteractionDesignFoundation/add-event-to-calendar-docs):
 
