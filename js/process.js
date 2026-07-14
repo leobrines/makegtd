@@ -121,11 +121,14 @@
     switch (step) {
       case 'actionable':
         html +=
-          '<div class="flex items-start gap-1 mb-4">' +
-          '<p class="text-lg font-medium">' + esc('¿Te comprometes a hacer algo al respecto?') + '</p>' +
+          '<div class="mb-4">' +
+          '<div class="flex items-start gap-1">' +
+          '<p class="text-lg font-medium">' + esc('¿Es accionable?') + '</p>' +
           '<button type="button" class="w-11 h-11 -my-2 shrink-0 flex items-center justify-center" data-action="pz-help-actionable" aria-label="¿Qué es un accionable?" aria-haspopup="dialog">' +
           '<span class="w-5 h-5 rounded-full border border-stone-300 dark:border-stone-600 text-xs font-semibold text-stone-400 dark:text-stone-500 flex items-center justify-center" aria-hidden="true">!</span>' +
           '</button>' +
+          '</div>' +
+          '<p class="text-sm text-stone-500 dark:text-stone-400">' + esc('Es decir: ¿te comprometes a hacer algo ahora?') + '</p>' +
           '</div>';
         html += choice('pz-yes-actionable', '⚡', 'Sí, hay que actuar');
         html += choice('pz-no-actionable', '🍃', 'No, por ahora no');
