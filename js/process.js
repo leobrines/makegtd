@@ -166,11 +166,20 @@
       return html + global.GTD.views.emptyState('🎉', 'Bandeja vacía. Tu mente puede soltar.', 'Ver próximas acciones', '#/siguientes');
     }
 
-    // The item being clarified, always visible and stable at the top.
+    // The item being clarified, always visible and stable at the top. Title and
+    // notes stay editable in place: clarifying IS rewriting the raw capture into
+    // a concrete next step (Setup Guide p. 2, "Clarify: define actionable things
+    // into concrete next steps and successful outcomes").
     html +=
       '<div class="card px-5 py-5 mb-6">' +
-      '<p class="text-xl font-medium break-words">' + esc(item.title) + '</p>' +
-      (item.notes ? '<p class="text-sm text-stone-500 dark:text-stone-400 mt-1">' + esc(item.notes) + '</p>' : '') +
+      '<div class="flex items-start gap-1">' +
+      '<input type="text" id="pz-item-title" class="flex-1 min-w-0 text-xl font-medium bg-transparent outline-none" ' +
+      'value="' + esc(item.title) + '" aria-label="Texto capturado" autocomplete="off" />' +
+      global.GTD.views.helpIcon('pz-help-rewrite', 'Reescribe para aclarar') +
+      '</div>' +
+      '<textarea id="pz-item-notes" rows="' + (item.notes ? 3 : 1) + '" ' +
+      'class="w-full mt-1 text-sm text-stone-500 dark:text-stone-400 bg-transparent outline-none placeholder-stone-400 dark:placeholder-stone-600" ' +
+      'placeholder="Añadir nota (opcional)" aria-label="Notas">' + esc(item.notes) + '</textarea>' +
       (pending && pending.actionTitle
         ? '<p class="text-sm text-stone-500 dark:text-stone-400 mt-2">Primera acción: ' + esc(pending.actionTitle) + '</p>'
         : '') +
@@ -363,8 +372,57 @@
 
     $('#actionable-help-close, #actionable-help-ok').on('click', closeHelp);
 
+    // Help popup: rewriting the captured text while clarifying.
+    function closeRewriteHelp() {
+      $('#rewrite-help-overlay').addClass('hidden').attr('aria-hidden', 'true');
+    }
+
+    $view.on('click', '[data-action="pz-help-rewrite"]', function () {
+      $('#rewrite-help-overlay').removeClass('hidden').attr('aria-hidden', 'false');
+    });
+
+    $('#rewrite-help-overlay').on('click', function (e) {
+      if (e.target === this) closeRewriteHelp();
+    });
+
+    $('#rewrite-help-close, #rewrite-help-ok').on('click', closeRewriteHelp);
+
     $(document).on('keydown', function (e) {
-      if (e.key === 'Escape') closeHelp();
+      if (e.key === 'Escape') {
+        closeHelp();
+        closeRewriteHelp();
+      }
+    });
+
+    // In-place rewrite of the item being clarified. Persist on change without
+    // re-rendering: a refresh here would swallow the click when the blur that
+    // fires the change event was caused by tapping a choice button.
+    $view.on('change', '#pz-item-title', function () {
+      var item = store.getItem(itemId);
+      if (!item) return;
+      var title = $(this).val().trim();
+      if (!title) {
+        $(this).val(item.title); // An empty title would lose the capture.
+        return;
+      }
+      if (title !== item.title) {
+        store.updateItem(itemId, { title: title });
+        global.GTD.app.toast('Guardado');
+      }
+    });
+
+    $view.on('keydown', '#pz-item-title', function (e) {
+      if (e.key === 'Enter') $(this).trigger('blur');
+    });
+
+    $view.on('change', '#pz-item-notes', function () {
+      var item = store.getItem(itemId);
+      if (!item) return;
+      var notes = $(this).val();
+      if (notes !== item.notes) {
+        store.updateItem(itemId, { notes: notes });
+        global.GTD.app.toast('Guardado');
+      }
     });
 
     $view.on('click', '[data-action="pz-back"]', function () {

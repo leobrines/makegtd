@@ -196,13 +196,30 @@
 
   // ---- Global quick capture ----
 
+  // The notes field starts collapsed so capture stays zero-friction, but full
+  // notes are first-class captures (Setup Guide p. 5: the inbox holds "notes
+  // and ideas to clarify later", not just one-liners).
+  function resetCaptureNotes() {
+    $('#capture-notes').val('').addClass('hidden');
+    $('#capture-notes-toggle').removeClass('hidden');
+  }
+
   function openCapture() {
     $('#capture-overlay').removeClass('hidden').attr('aria-hidden', 'false');
+    resetCaptureNotes();
     $('#capture-input').val('').trigger('focus');
   }
 
   function closeCapture() {
     $('#capture-overlay').addClass('hidden').attr('aria-hidden', 'true');
+  }
+
+  // Shared by both capture forms: a note with no title is still a valid
+  // capture (never lose stuff), so the title falls back to the note's first line.
+  function captureItem(title, notes) {
+    if (!title && !notes) return false;
+    store.addItem({ title: title || notes.split('\n')[0].trim().slice(0, 120), notes: notes });
+    return true;
   }
 
   function bindCapture() {
@@ -212,18 +229,44 @@
       if (e.target === this) closeCapture();
     });
 
+    $('#capture-notes-toggle').on('click', function () {
+      $(this).addClass('hidden');
+      $('#capture-notes').removeClass('hidden').trigger('focus');
+    });
+
     $('#capture-form').on('submit', function (e) {
       e.preventDefault();
       var title = $('#capture-input').val().trim();
-      if (!title) {
+      var notes = $('#capture-notes').val().trim();
+      if (!captureItem(title, notes)) {
         closeCapture();
         return;
       }
-      store.addItem({ title: title });
       $('#capture-input').val('');
+      resetCaptureNotes();
       toast('Capturada 📥');
       refresh();
       $('#capture-input').trigger('focus'); // Stay open: chain several captures.
+    });
+
+    // Help popup: what belongs in the inbox. Delegated on document because the
+    // trigger lives both in this overlay and in the Inbox view's capture form.
+    function closeCaptureHelp() {
+      $('#capture-help-overlay').addClass('hidden').attr('aria-hidden', 'true');
+    }
+
+    $(document).on('click', '[data-action="help-capture"]', function () {
+      $('#capture-help-overlay').removeClass('hidden').attr('aria-hidden', 'false');
+    });
+
+    $('#capture-help-overlay').on('click', function (e) {
+      if (e.target === this) closeCaptureHelp();
+    });
+
+    $('#capture-help-close, #capture-help-ok').on('click', closeCaptureHelp);
+
+    $(document).on('keydown', function (e) {
+      if (e.key === 'Escape') closeCaptureHelp();
     });
 
     $(document).on('keydown', function (e) {
@@ -360,5 +403,6 @@
   global.GTD.app = {
     refresh: refresh,
     toast: toast,
+    captureItem: captureItem,
   };
 })(window, jQuery);
