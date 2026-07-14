@@ -75,6 +75,19 @@
     });
   }
 
+  // Trash queries: newest deletions first.
+  function byDeletedAt(a, b) {
+    return (a.deletedAt || '') > (b.deletedAt || '') ? -1 : 1;
+  }
+
+  function trashedItems() {
+    return store.getTrash().items.slice().sort(byDeletedAt);
+  }
+
+  function trashedProjects() {
+    return store.getTrash().projects.slice().sort(byDeletedAt);
+  }
+
   function overdueItems() {
     var today = todayISO();
     return scheduledItems().filter(function (item) {
@@ -294,6 +307,8 @@
     somedayItems: somedayItems,
     referenceItems: referenceItems,
     doneItems: doneItems,
+    trashedItems: trashedItems,
+    trashedProjects: trashedProjects,
     overdueItems: overdueItems,
     dueTodayItems: dueTodayItems,
     upcomingItems: upcomingItems,

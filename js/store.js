@@ -12,6 +12,10 @@
       items: [],
       projects: [],
       contexts: DEFAULT_CONTEXTS.slice(),
+      trash: {
+        items: [],
+        projects: [],
+      },
       settings: {
         lastReviewAt: null,
         focusDate: null,
@@ -43,6 +47,11 @@
     data.items = Array.isArray(data.items) ? data.items : base.items;
     data.projects = Array.isArray(data.projects) ? data.projects : base.projects;
     data.contexts = Array.isArray(data.contexts) && data.contexts.length ? data.contexts : base.contexts;
+    var trash = data.trash && typeof data.trash === 'object' ? data.trash : {};
+    data.trash = {
+      items: Array.isArray(trash.items) ? trash.items : [],
+      projects: Array.isArray(trash.projects) ? trash.projects : [],
+    };
     data.settings = Object.assign({}, base.settings, data.settings || {});
     return data;
   }
@@ -103,7 +112,27 @@
     return item;
   }
 
+  // Deleting is recoverable: the item moves to the trash and only leaves the
+  // system for good when the trash is emptied.
   function removeItem(id) {
+    var s = load();
+    for (var i = 0; i < s.items.length; i++) {
+      if (s.items[i].id === id) {
+        var item = s.items.splice(i, 1)[0];
+        item.isFocus = false;
+        item.deletedAt = new Date().toISOString();
+        s.trash.items.push(item);
+        save();
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Hard delete, skipping the trash. Only for internal replacements (e.g. an
+  // inbox item transformed into a project during Clarify), never for the
+  // user-facing delete actions.
+  function destroyItem(id) {
     var items = load().items;
     for (var i = 0; i < items.length; i++) {
       if (items[i].id === id) {
@@ -153,15 +182,67 @@
     return project;
   }
 
+  // Recoverable, like removeItem. Items keep their projectId while the project
+  // sits in the trash (so restoring relinks them); links are only cut for good
+  // when the trash is emptied.
   function removeProject(id) {
     var s = load();
-    s.projects = s.projects.filter(function (p) {
-      return p.id !== id;
+    for (var i = 0; i < s.projects.length; i++) {
+      if (s.projects[i].id === id) {
+        var project = s.projects.splice(i, 1)[0];
+        project.deletedAt = new Date().toISOString();
+        s.trash.projects.push(project);
+        save();
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // ---- Trash ----
+
+  function getTrash() {
+    return load().trash;
+  }
+
+  function restoreItem(id) {
+    var s = load();
+    for (var i = 0; i < s.trash.items.length; i++) {
+      if (s.trash.items[i].id === id) {
+        var item = s.trash.items.splice(i, 1)[0];
+        delete item.deletedAt;
+        s.items.push(item);
+        save();
+        return item;
+      }
+    }
+    return null;
+  }
+
+  function restoreProject(id) {
+    var s = load();
+    for (var i = 0; i < s.trash.projects.length; i++) {
+      if (s.trash.projects[i].id === id) {
+        var project = s.trash.projects.splice(i, 1)[0];
+        delete project.deletedAt;
+        s.projects.push(project);
+        save();
+        return project;
+      }
+    }
+    return null;
+  }
+
+  // The only truly destructive delete: once emptied, nothing comes back.
+  function emptyTrash() {
+    var s = load();
+    // Projects are gone for good now, so cut the links that restore relied on.
+    s.trash.projects.forEach(function (project) {
+      s.items.forEach(function (item) {
+        if (item.projectId === project.id) item.projectId = null;
+      });
     });
-    // Detach items that pointed to this project.
-    s.items.forEach(function (item) {
-      if (item.projectId === id) item.projectId = null;
-    });
+    s.trash = { items: [], projects: [] };
     save();
   }
 
@@ -234,11 +315,16 @@
     addItem: addItem,
     updateItem: updateItem,
     removeItem: removeItem,
+    destroyItem: destroyItem,
     getProjects: getProjects,
     getProject: getProject,
     addProject: addProject,
     updateProject: updateProject,
     removeProject: removeProject,
+    getTrash: getTrash,
+    restoreItem: restoreItem,
+    restoreProject: restoreProject,
+    emptyTrash: emptyTrash,
     getContexts: getContexts,
     addContext: addContext,
     removeContext: removeContext,

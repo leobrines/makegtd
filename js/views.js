@@ -458,6 +458,58 @@
     return html;
   }
 
+  function renderTrash() {
+    var items = model.trashedItems();
+    var projects = model.trashedProjects();
+    var html = header('Papelera', 'Lo que eliminas espera aquí. Solo al vaciarla desaparece de verdad.');
+
+    if (!items.length && !projects.length) {
+      return html + emptyState('🗑️', 'La papelera está vacía.');
+    }
+
+    function deletedMeta(noun, deletedAt) {
+      var when = model.relativeDays((deletedAt || '').slice(0, 10));
+      return (
+        '<span class="text-xs text-stone-400 dark:text-stone-500">' +
+        esc(noun) + (when ? ' · ' + esc(when) : '') +
+        '</span>'
+      );
+    }
+
+    if (items.length) {
+      html += sectionTitle('Tareas');
+      html += '<ul>' + items.map(function (item) {
+        return (
+          '<li class="card mb-2 flex items-center gap-3 px-4 min-h-[52px] py-3">' +
+          '<span class="flex-1 min-w-0"><span class="block truncate">' + esc(item.title) + '</span>' +
+          deletedMeta(model.STATUS_LABELS[item.status] || 'Tarea', item.deletedAt) +
+          '</span>' +
+          '<button type="button" class="btn-ghost text-accent shrink-0" data-action="restore-item" data-id="' + item.id + '">Restaurar</button>' +
+          '</li>'
+        );
+      }).join('') + '</ul>';
+    }
+
+    if (projects.length) {
+      html += sectionTitle('Proyectos');
+      html += '<ul>' + projects.map(function (p) {
+        return (
+          '<li class="card mb-2 flex items-center gap-3 px-4 min-h-[52px] py-3">' +
+          '<span class="flex-1 min-w-0"><span class="block truncate">' + esc(p.name) + '</span>' +
+          deletedMeta('Proyecto · sus tareas se reconectan al restaurarlo', p.deletedAt) +
+          '</span>' +
+          '<button type="button" class="btn-ghost text-accent shrink-0" data-action="restore-project" data-id="' + p.id + '">Restaurar</button>' +
+          '</li>'
+        );
+      }).join('') + '</ul>';
+    }
+
+    html += '<div class="mt-10">';
+    html += '<button type="button" class="btn-ghost text-red-500 dark:text-red-400" data-action="empty-trash">Vaciar papelera…</button>';
+    html += '</div>';
+    return html;
+  }
+
   function renderSettings() {
     var contexts = store.getContexts();
     var html = header('Ajustes');
@@ -553,7 +605,7 @@
     $view.on('click', '[data-action="delete"]', function () {
       store.removeItem($(this).data('id'));
       expandedItemId = null;
-      toast('Eliminada');
+      toast('Movida a la papelera');
       refresh();
     });
 
@@ -641,9 +693,10 @@
       location.hash = '#/proyectos';
     });
 
+    // Recoverable (goes to the trash), so no confirm dialog is needed.
     $view.on('click', '[data-action="delete-project"]', function () {
-      if (!global.confirm('¿Eliminar este proyecto? Sus tareas quedarán sin proyecto.')) return;
       store.removeProject($(this).data('id'));
+      toast('Proyecto movido a la papelera');
       location.hash = '#/proyectos';
     });
 
@@ -656,6 +709,24 @@
     $view.on('click', '[data-action="activate-project"]', function () {
       model.activateProject($(this).data('id'));
       toast('Proyecto activado');
+      refresh();
+    });
+
+    // Trash.
+    $view.on('click', '[data-action="restore-item"]', function () {
+      store.restoreItem($(this).data('id'));
+      toast('Restaurada');
+      refresh();
+    });
+    $view.on('click', '[data-action="restore-project"]', function () {
+      store.restoreProject($(this).data('id'));
+      toast('Proyecto restaurado');
+      refresh();
+    });
+    $view.on('click', '[data-action="empty-trash"]', function () {
+      if (!global.confirm('¿Vaciar la papelera? Su contenido se eliminará definitivamente.')) return;
+      store.emptyTrash();
+      toast('Papelera vaciada');
       refresh();
     });
 
@@ -724,6 +795,7 @@
     renderWaiting: renderWaiting,
     renderSomeday: renderSomeday,
     renderReference: renderReference,
+    renderTrash: renderTrash,
     renderSettings: renderSettings,
     collapseEditor: function () {
       expandedItemId = null;
