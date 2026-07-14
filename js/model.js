@@ -27,6 +27,51 @@
   var FOCUS_LIMIT = 3;
   var REVIEW_INTERVAL_DAYS = 7;
 
+  // Higher horizons of focus (2-5), per the official "Levels of Your Work"
+  // altitude map (docs/gtd/gtd-levels-of-your-work.pdf). Ground (actions) and
+  // Horizon 1 (projects) already have their own views, so they are not here.
+  // Definitions, timeframes and review cadences follow the official document;
+  // Horizon 4's 3-5 year timeframe comes from "The 6 Horizons of Focus"
+  // (gettingthingsdone.com). Rendered top of the page first = Horizon 2, the
+  // level closest to your projects.
+  var HORIZONS = [
+    {
+      level: 2,
+      title: 'Áreas de enfoque y responsabilidad',
+      description:
+        'Las esferas importantes de tu trabajo y tu vida que debes mantener en buen estado ' +
+        'para que «el motor siga funcionando». No se terminan: se mantienen. ' +
+        'Revísalas una vez al mes o cuando tu trabajo o tu vida cambien.',
+      placeholder: 'Ej.: Salud · Finanzas · Familia · Ventas…',
+      help: true,
+    },
+    {
+      level: 3,
+      title: 'Metas y objetivos',
+      description:
+        '¿Qué quieres y necesitas lograr, en concreto, en los próximos 12–24 meses ' +
+        'para hacer realidad tu visión? Revísalas cada año y recalibra cada trimestre.',
+      placeholder: 'Ej.: Terminar el grado antes de junio',
+    },
+    {
+      level: 4,
+      title: 'Visión',
+      description:
+        'Cómo se verá, sonará y sentirá el éxito a 3–5 años: resultados a largo plazo ' +
+        'y escenarios ideales. Revísala cuando necesites claridad, dirección o motivación.',
+      placeholder: 'Ej.: Vivir del taller propio en el campo',
+    },
+    {
+      level: 5,
+      title: 'Propósito y principios',
+      description:
+        'La intención última de lo que haces y los estándares para su éxito. ' +
+        '¿Por qué lo haces? ¿Qué comportamientos son innegociables? ' +
+        'Revísalo cuando necesites claridad, dirección o motivación.',
+      placeholder: 'Ej.: Ayudar a otros a lograr sus sueños',
+    },
+  ];
+
   // Local date as YYYY-MM-DD (never UTC, to avoid off-by-one around midnight).
   function todayISO() {
     var d = new Date();
@@ -215,6 +260,24 @@
     return store.getCriterionValues('priorities');
   }
 
+  // Entries of one horizon level (2-5), oldest first (stable, list-like order).
+  function horizonItems(level) {
+    return store.getHorizons().filter(function (h) {
+      return h.level === level;
+    });
+  }
+
+  function trashedHorizons() {
+    return store.getTrash().horizons.slice().sort(byDeletedAt);
+  }
+
+  function horizonMeta(level) {
+    for (var i = 0; i < HORIZONS.length; i++) {
+      if (HORIZONS[i].level === level) return HORIZONS[i];
+    }
+    return null;
+  }
+
   function activeProjects() {
     return store.getProjects().filter(function (p) {
       return p.status === 'active';
@@ -359,6 +422,10 @@
     STATUS: STATUS,
     STATUS_LABELS: STATUS_LABELS,
     FOCUS_LIMIT: FOCUS_LIMIT,
+    HORIZONS: HORIZONS,
+    horizonItems: horizonItems,
+    horizonMeta: horizonMeta,
+    trashedHorizons: trashedHorizons,
     todayISO: todayISO,
     inboxItems: inboxItems,
     nextActions: nextActions,

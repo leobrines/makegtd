@@ -25,10 +25,14 @@
       version: 1,
       items: [],
       projects: [],
+      // Higher horizons of focus (Levels of Your Work): entries for horizons
+      // 2 (areas of focus) through 5 (purpose and principles).
+      horizons: [],
       contexts: DEFAULT_CONTEXTS.slice(),
       trash: {
         items: [],
         projects: [],
+        horizons: [],
       },
       settings: {
         lastReviewAt: null,
@@ -76,11 +80,13 @@
     data.version = 1;
     data.items = Array.isArray(data.items) ? data.items : base.items;
     data.projects = Array.isArray(data.projects) ? data.projects : base.projects;
+    data.horizons = Array.isArray(data.horizons) ? data.horizons : base.horizons;
     data.contexts = Array.isArray(data.contexts) && data.contexts.length ? data.contexts : base.contexts;
     var trash = data.trash && typeof data.trash === 'object' ? data.trash : {};
     data.trash = {
       items: Array.isArray(trash.items) ? trash.items : [],
       projects: Array.isArray(trash.projects) ? trash.projects : [],
+      horizons: Array.isArray(trash.horizons) ? trash.horizons : [],
     };
     data.settings = Object.assign({}, base.settings, data.settings || {});
     Object.keys(CRITERIA).forEach(function (key) {
@@ -235,6 +241,58 @@
     return false;
   }
 
+  // ---- Horizons of focus (levels 2-5) ----
+
+  function getHorizons() {
+    return load().horizons;
+  }
+
+  function getHorizon(id) {
+    var horizons = load().horizons;
+    for (var i = 0; i < horizons.length; i++) {
+      if (horizons[i].id === id) return horizons[i];
+    }
+    return null;
+  }
+
+  function addHorizon(level, text) {
+    text = String(text || '').trim();
+    level = Number(level);
+    if (!text || level < 2 || level > 5) return null;
+    var horizon = {
+      id: uid(),
+      level: level,
+      text: text,
+      createdAt: new Date().toISOString(),
+    };
+    load().horizons.push(horizon);
+    save();
+    return horizon;
+  }
+
+  function updateHorizon(id, fields) {
+    var horizon = getHorizon(id);
+    if (!horizon) return null;
+    Object.assign(horizon, fields);
+    save();
+    return horizon;
+  }
+
+  // Recoverable, like removeItem: the entry waits in the trash.
+  function removeHorizon(id) {
+    var s = load();
+    for (var i = 0; i < s.horizons.length; i++) {
+      if (s.horizons[i].id === id) {
+        var horizon = s.horizons.splice(i, 1)[0];
+        horizon.deletedAt = new Date().toISOString();
+        s.trash.horizons.push(horizon);
+        save();
+        return true;
+      }
+    }
+    return false;
+  }
+
   // ---- Trash ----
 
   function getTrash() {
@@ -269,6 +327,20 @@
     return null;
   }
 
+  function restoreHorizon(id) {
+    var s = load();
+    for (var i = 0; i < s.trash.horizons.length; i++) {
+      if (s.trash.horizons[i].id === id) {
+        var horizon = s.trash.horizons.splice(i, 1)[0];
+        delete horizon.deletedAt;
+        s.horizons.push(horizon);
+        save();
+        return horizon;
+      }
+    }
+    return null;
+  }
+
   // The only truly destructive delete: once emptied, nothing comes back.
   function emptyTrash() {
     var s = load();
@@ -278,7 +350,7 @@
         if (item.projectId === project.id) item.projectId = null;
       });
     });
-    s.trash = { items: [], projects: [] };
+    s.trash = { items: [], projects: [], horizons: [] };
     save();
   }
 
@@ -394,9 +466,15 @@
     addProject: addProject,
     updateProject: updateProject,
     removeProject: removeProject,
+    getHorizons: getHorizons,
+    getHorizon: getHorizon,
+    addHorizon: addHorizon,
+    updateHorizon: updateHorizon,
+    removeHorizon: removeHorizon,
     getTrash: getTrash,
     restoreItem: restoreItem,
     restoreProject: restoreProject,
+    restoreHorizon: restoreHorizon,
     emptyTrash: emptyTrash,
     getContexts: getContexts,
     addContext: addContext,

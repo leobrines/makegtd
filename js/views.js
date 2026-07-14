@@ -8,6 +8,9 @@
   // Which item row is expanded into its inline editor (progressive disclosure).
   var expandedItemId = null;
 
+  // Same, for horizon entries in the Horizons view.
+  var expandedHorizonId = null;
+
   // Escapes for both element and attribute contexts (quotes included: several
   // templates interpolate into value="…").
   function esc(text) {
@@ -507,6 +510,53 @@
     return html;
   }
 
+  // Higher horizons of focus (2-5). Ground and Horizon 1 live in their own
+  // views (actions/agenda and projects); here each higher level is a simple
+  // editable list, per the official "Levels of Your Work" altitude map.
+  function horizonRow(entry) {
+    return (
+      '<li class="card mb-2 overflow-hidden" data-horizon-id="' + entry.id + '">' +
+      '<button type="button" data-action="expand-horizon" data-id="' + entry.id + '" class="w-full text-left flex items-center gap-3 px-4 py-3 min-h-[52px]">' +
+      '<span class="flex-1 min-w-0 truncate">' + esc(entry.text) + '</span>' +
+      '</button>' +
+      (expandedHorizonId === entry.id
+        ? '<div class="border-t border-stone-100 dark:border-stone-800 px-4 py-4 space-y-3" data-horizon-editor-for="' + entry.id + '">' +
+          '<input type="text" class="field" data-field="text" value="' + esc(entry.text) + '" aria-label="Texto" />' +
+          '<div class="flex items-center justify-between gap-2 pt-1">' +
+          '<button type="button" class="btn-ghost text-red-500 dark:text-red-400" data-action="delete-horizon" data-id="' + entry.id + '">Eliminar</button>' +
+          '<button type="button" class="btn-primary" data-action="save-horizon" data-id="' + entry.id + '">Guardar</button>' +
+          '</div>' +
+          '</div>'
+        : '') +
+      '</li>'
+    );
+  }
+
+  function renderHorizons() {
+    var html = header(
+      'Horizontes',
+      'La perspectiva por encima de tus proyectos. Las prioridades bajan de arriba hacia abajo: el propósito alimenta la visión, la visión las metas, y las metas tus áreas y proyectos.'
+    );
+    model.HORIZONS.forEach(function (h) {
+      var entries = model.horizonItems(h.level);
+      html += sectionTitle(
+        'Horizonte ' + h.level + ' · ' + h.title,
+        h.help ? helpIcon('help-areas', '¿Qué es un área de enfoque y responsabilidad?') : ''
+      );
+      html += '<p class="text-xs text-stone-400 dark:text-stone-500 mb-2 px-1">' + esc(h.description) + '</p>';
+      if (entries.length) {
+        html += '<ul>' + entries.map(horizonRow).join('') + '</ul>';
+      }
+      html +=
+        '<form class="horizon-form card flex items-center gap-2 px-3 py-2" data-level="' + h.level + '">' +
+        '<input type="text" class="horizon-input flex-1 min-h-[44px] bg-transparent outline-none px-1 placeholder-stone-400 dark:placeholder-stone-500" ' +
+        'placeholder="' + esc(h.placeholder) + '" autocomplete="off" aria-label="Añadir a ' + esc(h.title) + '" />' +
+        '<button type="submit" class="btn-secondary">Añadir</button>' +
+        '</form>';
+    });
+    return html;
+  }
+
   function renderReference() {
     var items = model.referenceItems();
     var html = header('Referencia', 'Material útil que no requiere acción.');
@@ -518,9 +568,10 @@
   function renderTrash() {
     var items = model.trashedItems();
     var projects = model.trashedProjects();
+    var horizons = model.trashedHorizons();
     var html = header('Papelera', 'Lo que eliminas espera aquí. Solo al vaciarla desaparece de verdad.');
 
-    if (!items.length && !projects.length) {
+    if (!items.length && !projects.length && !horizons.length) {
       return html + emptyState('🗑️', 'La papelera está vacía.');
     }
 
@@ -556,6 +607,21 @@
           deletedMeta('Proyecto · sus tareas se reconectan al restaurarlo', p.deletedAt) +
           '</span>' +
           '<button type="button" class="btn-ghost text-accent shrink-0" data-action="restore-project" data-id="' + p.id + '">Restaurar</button>' +
+          '</li>'
+        );
+      }).join('') + '</ul>';
+    }
+
+    if (horizons.length) {
+      html += sectionTitle('Horizontes');
+      html += '<ul>' + horizons.map(function (h) {
+        var meta = model.horizonMeta(h.level);
+        return (
+          '<li class="card mb-2 flex items-center gap-3 px-4 min-h-[52px] py-3">' +
+          '<span class="flex-1 min-w-0"><span class="block truncate">' + esc(h.text) + '</span>' +
+          deletedMeta(meta ? 'Horizonte ' + h.level + ' · ' + meta.title : 'Horizonte', h.deletedAt) +
+          '</span>' +
+          '<button type="button" class="btn-ghost text-accent shrink-0" data-action="restore-horizon" data-id="' + h.id + '">Restaurar</button>' +
           '</li>'
         );
       }).join('') + '</ul>';
@@ -823,6 +889,63 @@
       if (e.key === 'Escape') closeContextHelp();
     });
 
+    // Horizons (2-5): add, expand, save, delete.
+    $view.on('submit', '.horizon-form', function (e) {
+      e.preventDefault();
+      var level = $(this).data('level');
+      var $input = $(this).find('.horizon-input');
+      if (!store.addHorizon(level, $input.val())) return;
+      refresh();
+      $('.horizon-form[data-level="' + level + '"] .horizon-input').trigger('focus');
+    });
+
+    $view.on('click', '[data-action="expand-horizon"]', function () {
+      var id = $(this).data('id');
+      expandedHorizonId = expandedHorizonId === id ? null : id;
+      refresh();
+    });
+
+    $view.on('click', '[data-action="save-horizon"]', function () {
+      var id = $(this).data('id');
+      var text = $view.find('[data-horizon-editor-for="' + id + '"] [data-field="text"]').val().trim();
+      if (text) store.updateHorizon(id, { text: text });
+      expandedHorizonId = null;
+      toast('Guardado');
+      refresh();
+    });
+
+    $view.on('click', '[data-action="delete-horizon"]', function () {
+      store.removeHorizon($(this).data('id'));
+      expandedHorizonId = null;
+      toast('Movido a la papelera');
+      refresh();
+    });
+
+    $view.on('click', '[data-action="restore-horizon"]', function () {
+      store.restoreHorizon($(this).data('id'));
+      toast('Restaurado');
+      refresh();
+    });
+
+    // Help popup: what an "area of focus and accountability" is (Horizons view).
+    function closeAreasHelp() {
+      $('#areas-help-overlay').addClass('hidden').attr('aria-hidden', 'true');
+    }
+
+    $view.on('click', '[data-action="help-areas"]', function () {
+      $('#areas-help-overlay').removeClass('hidden').attr('aria-hidden', 'false');
+    });
+
+    $('#areas-help-overlay').on('click', function (e) {
+      if (e.target === this) closeAreasHelp();
+    });
+
+    $('#areas-help-close, #areas-help-ok').on('click', closeAreasHelp);
+
+    $(document).on('keydown', function (e) {
+      if (e.key === 'Escape') closeAreasHelp();
+    });
+
     // Projects.
     $view.on('submit', '#project-form', function (e) {
       e.preventDefault();
@@ -1026,11 +1149,13 @@
     helpIcon: helpIcon,
     renderWaiting: renderWaiting,
     renderSomeday: renderSomeday,
+    renderHorizons: renderHorizons,
     renderReference: renderReference,
     renderTrash: renderTrash,
     renderSettings: renderSettings,
     collapseEditor: function () {
       expandedItemId = null;
+      expandedHorizonId = null;
     },
   };
 })(window, jQuery);
