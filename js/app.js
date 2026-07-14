@@ -224,6 +224,7 @@
       var typing = tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable;
       if (e.key === 'Escape') {
         closeCapture();
+        closeInstallPopup(true);
         return;
       }
       if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -231,6 +232,92 @@
         e.preventDefault();
         openCapture();
       }
+    });
+  }
+
+  // ---- PWA install popup ----
+
+  // Remembered outside the main data key so export/import never touches it.
+  var INSTALL_DISMISSED_KEY = 'gtd:install-dismissed';
+  var deferredInstallPrompt = null;
+
+  function isStandalone() {
+    return (
+      (global.matchMedia && global.matchMedia('(display-mode: standalone)').matches) ||
+      global.navigator.standalone === true
+    );
+  }
+
+  function isIos() {
+    return /iphone|ipad|ipod/i.test(global.navigator.userAgent);
+  }
+
+  function installDismissed() {
+    try {
+      return global.localStorage.getItem(INSTALL_DISMISSED_KEY) === '1';
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function rememberInstallDismissed() {
+    try {
+      global.localStorage.setItem(INSTALL_DISMISSED_KEY, '1');
+    } catch (ignored) {}
+  }
+
+  function openInstallPopup() {
+    $('#install-overlay').removeClass('hidden').attr('aria-hidden', 'false');
+  }
+
+  function closeInstallPopup(remember) {
+    var $overlay = $('#install-overlay');
+    if ($overlay.hasClass('hidden')) return;
+    $overlay.addClass('hidden').attr('aria-hidden', 'true');
+    if (remember) rememberInstallDismissed();
+  }
+
+  function bindInstallPopup() {
+    if (isStandalone()) return; // Already installed and running as an app.
+
+    global.addEventListener('beforeinstallprompt', function (e) {
+      e.preventDefault(); // Suppress the browser mini-infobar; we show our own popup.
+      deferredInstallPrompt = e;
+      if (!installDismissed()) openInstallPopup();
+    });
+
+    // iOS Safari never fires beforeinstallprompt: show manual instructions instead.
+    if (isIos()) {
+      $('#install-accept').addClass('hidden');
+      $('#install-ios-hint').removeClass('hidden');
+      if (!installDismissed()) openInstallPopup();
+    }
+
+    global.addEventListener('appinstalled', function () {
+      closeInstallPopup(true);
+      toast('App instalada ✅');
+    });
+
+    $('#install-accept').on('click', function () {
+      if (!deferredInstallPrompt) {
+        closeInstallPopup(false);
+        return;
+      }
+      var promptEvent = deferredInstallPrompt;
+      deferredInstallPrompt = null;
+      closeInstallPopup(false);
+      promptEvent.prompt();
+      promptEvent.userChoice.then(function (choice) {
+        if (choice && choice.outcome === 'dismissed') rememberInstallDismissed();
+      });
+    });
+
+    $('#install-close, #install-dismiss').on('click', function () {
+      closeInstallPopup(true);
+    });
+
+    $('#install-overlay').on('click', function (e) {
+      if (e.target === this) closeInstallPopup(true);
     });
   }
 
@@ -242,6 +329,7 @@
     global.GTD.process.bind();
     global.GTD.review.bind();
     bindCapture();
+    bindInstallPopup();
 
     $('#bottom-nav').on('click', '#more-button', function () {
       moreOpen = !moreOpen;
