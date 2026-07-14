@@ -16,6 +16,7 @@ They are stored here for offline reference only. Downloaded on 2026-07-14.
 | `gtd-workflow-map.pdf` | **GTD® Workflow Map — Clarifying and Organizing.** The official decision-tree diagram: stuff → what is it? → is it actionable? → trash / incubate (Someday/Maybe, tickler) / reference, or → what's the next action? → do it (<2 min) / delegate (Waiting For) / defer (calendar or Next Actions), with multi-step outcomes becoming Projects. | <https://gettingthingsdone.com/wp-content/uploads/2024/05/GTD_workflow_map.pdf> |
 | `gtd-weekly-review-checklist.pdf` | **GTD Weekly Review® Checklist.** The official 11 steps in 3 phases — Get Clear (collect loose papers; get "in" to zero; empty your head), Get Current (review Next Actions lists; review previous calendar; review upcoming calendar; review Waiting For; review Projects ensuring at least one next action each; review checklists), Get Creative (review Someday/Maybe; be creative & courageous). | <https://gettingthingsdone.com/wp-content/uploads/2016/04/GTD-WeeklyReview.pdf> |
 | `gtd-setup-guide-paper-sample.pdf` | **David Allen Company Setup Guide (official sample).** The canonical system sections and setup order: In, Calendar, Next Actions lists (by context: Calls, Computer, Office, Home, Errands, Anywhere, Waiting For), Agendas, Projects, Project Support, Someday/Maybe, Focus & Direction, Reference, Contacts. Includes the five steps of mastering workflow and the calendar rule. | <https://gettingthingsdone.com/wp-content/uploads/2019/08/GT_Paper_Organizers_SAMPLE.pdf> |
+| `gtd-levels-of-your-work.pdf` | **Levels of Your Work® — the Horizons of Focus altitude map.** The official definition of the six horizons: Ground (calendar/actions), Horizon 1 (projects: multi-step outcomes completable within a year), Horizon 2 (areas of focus and accountability: spheres of work and life to maintain, "keep the engines running"), Horizon 3 (goals and objectives, 12–24 months), Horizon 4 (vision, long-term ideal scenarios), Horizon 5 (purpose and principles). Includes typical formats and suggested review frequency per horizon. Downloaded 2026-07-14. | <https://gettingthingsdone.com/wp-content/uploads/2014/10/2016-Levels-of-Your-Work.pdf> |
 
 ## Canonical rules the app must honor
 
@@ -41,3 +42,16 @@ Extracted from the documents above; cite the document when relying on one of the
    action? if multi-step, what outcome (project)? if <2 minutes, do it now; delegate →
    Waiting For; defer → calendar or Next Actions. If not actionable: trash, incubate
    (Someday/Maybe), or reference.
+7. **Priorities flow top-down through the horizons** (Levels of Your Work): purpose and
+   values drive vision, vision creates goals and objectives, goals frame areas of focus
+   and accountability, and all of those generate projects, which require actions.
+8. **Areas of focus are not projects** (Levels of Your Work, Horizon 2): they are
+   ongoing spheres of work and life "to be maintained at standards to keep the engines
+   running" — they have no end date and never appear on the Projects list. Ongoing
+   commitments (a business, health, a role) are areas; the finite outcomes they
+   generate are projects.
+9. **Higher horizons are reviewed at their own cadence, not in the weekly review**
+   (Levels of Your Work; Setup Guide, "Reviewing Your Lists"): areas of focus at
+   monthly check-ins or when job/life changes; goals annually with quarterly
+   recalibration; vision and purpose whenever additional clarity, direction, alignment,
+   or motivation are needed. The 11-step weekly review checklist stays untouched.

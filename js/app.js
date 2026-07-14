@@ -15,6 +15,7 @@
     '/proyectos': function () { return views.renderProjects(); },
     '/espera': function () { return views.renderWaiting(); },
     '/algundia': function () { return views.renderSomeday(); },
+    '/horizontes': function () { return views.renderHorizons(); },
     '/referencia': function () { return views.renderReference(); },
     '/revision': function () { return global.GTD.review.render(); },
     '/papelera': function () { return views.renderTrash(); },
@@ -28,6 +29,7 @@
     { path: '/siguientes', icon: '📋', label: 'Próximas acciones' },
     { path: '/agenda', icon: '📅', label: 'Agenda' },
     { path: '/proyectos', icon: '🗂️', label: 'Proyectos' },
+    { path: '/horizontes', icon: '🧭', label: 'Horizontes' },
     { path: '/espera', icon: '📮', label: 'A la espera' },
     { path: '/algundia', icon: '🌙', label: 'Algún día' },
     { path: '/referencia', icon: '📚', label: 'Referencia' },
@@ -49,6 +51,7 @@
   var NAV_MOBILE_MORE = [
     { path: '/procesar', icon: '⚡', label: 'Procesar' },
     { path: '/agenda', icon: '📅', label: 'Agenda' },
+    { path: '/horizontes', icon: '🧭', label: 'Horizontes' },
     { path: '/espera', icon: '📮', label: 'A la espera' },
     { path: '/algundia', icon: '🌙', label: 'Algún día' },
     { path: '/referencia', icon: '📚', label: 'Referencia' },
