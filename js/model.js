@@ -177,6 +177,13 @@
     return true;
   }
 
+  // Whether the contexts feature is on. When off, contexts disappear from the
+  // whole UI (lists, editors, Clarify wizard, review) but stored values are
+  // kept, so re-enabling brings everything back untouched.
+  function contextsEnabled() {
+    return store.getSettings().contextsEnabled !== false;
+  }
+
   function activeProjects() {
     return store.getProjects().filter(function (p) {
       return p.status === 'active';
@@ -313,6 +320,7 @@
     dueTodayItems: dueTodayItems,
     upcomingItems: upcomingItems,
     gcalUrl: gcalUrl,
+    contextsEnabled: contextsEnabled,
     focusItems: focusItems,
     canAddFocus: canAddFocus,
     toggleFocus: toggleFocus,

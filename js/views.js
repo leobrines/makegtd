@@ -70,7 +70,7 @@
 
   function itemMeta(item) {
     var bits = [];
-    if (item.context) bits.push('<span>' + esc(item.context) + '</span>');
+    if (item.context && model.contextsEnabled()) bits.push('<span>' + esc(item.context) + '</span>');
     if (item.projectId) {
       var project = store.getProject(item.projectId);
       if (project) bits.push('<span>▸ ' + esc(project.name) + '</span>');
@@ -176,7 +176,9 @@
       '<textarea class="field" rows="2" data-field="notes" placeholder="Notas (opcional)" aria-label="Notas">' + esc(item.notes) + '</textarea>' +
       '<div class="grid grid-cols-2 gap-2">' +
       '<select class="field" data-field="status" aria-label="Lista">' + statusOptions(item.status) + '</select>' +
-      '<select class="field" data-field="context" aria-label="Contexto">' + contextOptions(item.context) + '</select>' +
+      (model.contextsEnabled()
+        ? '<select class="field" data-field="context" aria-label="Contexto">' + contextOptions(item.context) + '</select>'
+        : '') +
       '<select class="field" data-field="projectId" aria-label="Proyecto">' + projectOptions(item.projectId) + '</select>' +
       '<input type="date" class="field" data-field="date" value="' + esc(item.date || '') + '" aria-label="Fecha" />' +
       '<input type="time" class="field" data-field="time" value="' + esc(item.time || '') + '" aria-label="Hora (opcional)" />' +
@@ -282,9 +284,14 @@
   function renderNext(filterContext) {
     var items = model.nextActions();
     var contexts = store.getContexts();
-    var html = header('Próximas acciones', 'Una lista, un contexto, una acción.');
+    var contextsOn = model.contextsEnabled();
+    if (!contextsOn) filterContext = '';
+    var html = header(
+      'Próximas acciones',
+      contextsOn ? 'Una lista, un contexto, una acción.' : 'Una lista, una acción a la vez.'
+    );
 
-    if (items.length) {
+    if (items.length && contextsOn) {
       html += '<div class="flex flex-wrap gap-2 mb-5">';
       html += '<button type="button" class="chip' + (!filterContext ? ' chip-active' : '') + '" data-action="filter-context" data-context="">Todas</button>';
       contexts.forEach(function (c) {
@@ -531,23 +538,36 @@
 
   function renderSettings() {
     var contexts = store.getContexts();
+    var contextsOn = model.contextsEnabled();
     var html = header('Ajustes');
 
     html += sectionTitle('Contextos', helpIcon('help-context', '¿Qué es un contexto?'));
     html += '<div class="card px-4 py-4">';
-    html += '<ul class="mb-3">' + contexts.map(function (c) {
-      return (
-        '<li class="flex items-center justify-between min-h-[44px] border-b border-stone-100 dark:border-stone-800 last:border-0">' +
-        '<span>' + esc(c) + '</span>' +
-        '<button type="button" class="btn-ghost text-red-500 dark:text-red-400" data-action="remove-context" data-context="' + esc(c) + '" aria-label="Eliminar ' + esc(c) + '">×</button>' +
-        '</li>'
-      );
-    }).join('') + '</ul>';
     html +=
-      '<form id="context-form" class="flex gap-2">' +
-      '<input type="text" id="context-input" class="field flex-1" placeholder="@nuevo-contexto" autocomplete="off" />' +
-      '<button type="submit" class="btn-secondary">Añadir</button>' +
-      '</form></div>';
+      '<label class="flex items-center justify-between gap-3 min-h-[44px] cursor-pointer' +
+      (contextsOn ? ' pb-3 mb-3 border-b border-stone-100 dark:border-stone-800' : '') + '">' +
+      '<span class="min-w-0">' +
+      '<span class="block">Usar contextos</span>' +
+      '<span class="block text-xs text-stone-400 dark:text-stone-500 mt-0.5">Si los desactivas, desaparecen de toda la app y verás una única lista de próximas acciones.</span>' +
+      '</span>' +
+      '<input type="checkbox" id="contexts-enabled-toggle" class="w-6 h-6 shrink-0 accent-accent"' + (contextsOn ? ' checked' : '') + ' />' +
+      '</label>';
+    if (contextsOn) {
+      html += '<ul class="mb-3">' + contexts.map(function (c) {
+        return (
+          '<li class="flex items-center justify-between min-h-[44px] border-b border-stone-100 dark:border-stone-800 last:border-0">' +
+          '<span>' + esc(c) + '</span>' +
+          '<button type="button" class="btn-ghost text-red-500 dark:text-red-400" data-action="remove-context" data-context="' + esc(c) + '" aria-label="Eliminar ' + esc(c) + '">×</button>' +
+          '</li>'
+        );
+      }).join('') + '</ul>';
+      html +=
+        '<form id="context-form" class="flex gap-2">' +
+        '<input type="text" id="context-input" class="field flex-1" placeholder="@nuevo-contexto" autocomplete="off" />' +
+        '<button type="submit" class="btn-secondary">Añadir</button>' +
+        '</form>';
+    }
+    html += '</div>';
 
     html += sectionTitle('Tus datos');
     html += '<div class="card px-4 py-4 space-y-3">';
@@ -596,12 +616,15 @@
         title: $editor.find('[data-field="title"]').val().trim() || store.getItem(id).title,
         notes: $editor.find('[data-field="notes"]').val(),
         status: $editor.find('[data-field="status"]').val(),
-        context: $editor.find('[data-field="context"]').val() || null,
         projectId: $editor.find('[data-field="projectId"]').val() || null,
         date: $editor.find('[data-field="date"]').val() || null,
         time: $editor.find('[data-field="time"]').val() || null,
         waitingFor: $editor.find('[data-field="waitingFor"]').val() || null,
       };
+      // The context select is absent while contexts are disabled; skip the
+      // field so stored contexts survive a temporary toggle-off.
+      var $context = $editor.find('[data-field="context"]');
+      if ($context.length) fields.context = $context.val() || null;
       if (fields.status === model.STATUS.SCHEDULED && !fields.date) fields.status = model.STATUS.NEXT;
       if (fields.status !== model.STATUS.SCHEDULED) {
         fields.date = null;
@@ -771,6 +794,14 @@
     });
 
     // Settings.
+    $view.on('change', '#contexts-enabled-toggle', function () {
+      var enabled = this.checked;
+      store.updateSettings({ contextsEnabled: enabled });
+      if (!enabled) currentContextFilter = '';
+      toast(enabled ? 'Contextos activados' : 'Contextos desactivados');
+      refresh();
+    });
+
     $view.on('submit', '#context-form', function (e) {
       e.preventDefault();
       var name = $('#context-input').val();
