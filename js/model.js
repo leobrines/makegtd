@@ -96,19 +96,37 @@
     });
   }
 
-  // Google Calendar "add event" URL (all-day event; end date is exclusive).
+  // Google Calendar "add event" URL. All-day by default (end date exclusive);
+  // with an optional HH:MM time it becomes a one-hour timed event in floating
+  // local time (Google applies the user's calendar timezone).
   // Format per https://github.com/InteractionDesignFoundation/add-event-to-calendar-docs
   function gcalUrl(item) {
     var date = (item.date || todayISO()).slice(0, 10);
     var parts = date.split('-');
-    var end = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]) + 1);
-    var endStr = end.getFullYear() + pad(end.getMonth() + 1) + pad(end.getDate());
+    var dates;
+    if (item.time && /^\d{1,2}:\d{2}$/.test(item.time)) {
+      var hm = item.time.split(':');
+      var start = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), Number(hm[0]), Number(hm[1]));
+      var end = new Date(start.getTime() + 60 * 60 * 1000);
+      dates = localStamp(start) + '/' + localStamp(end);
+    } else {
+      var next = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]) + 1);
+      dates = date.replace(/-/g, '') + '/' +
+        next.getFullYear() + pad(next.getMonth() + 1) + pad(next.getDate());
+    }
     var url =
       'https://calendar.google.com/calendar/render?action=TEMPLATE' +
       '&text=' + encodeURIComponent(item.title || '') +
-      '&dates=' + date.replace(/-/g, '') + '/' + endStr;
+      '&dates=' + dates;
     if (item.notes) url += '&details=' + encodeURIComponent(item.notes);
     return url;
+  }
+
+  function localStamp(d) {
+    return (
+      d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) +
+      'T' + pad(d.getHours()) + pad(d.getMinutes()) + '00'
+    );
   }
 
   // Focus tasks are reset each day: settings.focusDate marks the day they belong to.

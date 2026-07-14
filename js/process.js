@@ -235,6 +235,8 @@
         html +=
           '<form id="pz-schedule-form">' +
           '<input type="date" id="pz-schedule-input" class="field mb-3" min="' + model.todayISO() + '" value="' + model.todayISO() + '" />' +
+          '<label class="block text-sm text-stone-500 dark:text-stone-400 mb-1" for="pz-schedule-time">Hora (opcional)</label>' +
+          '<input type="time" id="pz-schedule-time" class="field mb-3" />' +
           projectSelect(item) +
           '<button type="submit" class="btn-primary w-full">Programar</button>' +
           '<button type="button" class="btn-secondary w-full mt-2 gap-2" data-action="pz-gcal">' +
@@ -399,6 +401,7 @@
         title: pending ? pending.actionTitle : item.title,
         notes: pending ? '' : item.notes,
         date: date,
+        time: $('#pz-schedule-time').val() || null,
       }), '_blank', 'noopener');
     });
 
@@ -407,7 +410,11 @@
       var date = $('#pz-schedule-input').val();
       if (!date) return;
       var wasProject = !!pending;
-      commitAction({ status: model.STATUS.SCHEDULED, date: date });
+      commitAction({
+        status: model.STATUS.SCHEDULED,
+        date: date,
+        time: $('#pz-schedule-time').val() || null,
+      });
       finishItem((wasProject ? 'Proyecto creado; primera acción programada' : 'Programada') + ' para el ' + model.formatDate(date));
     });
 
