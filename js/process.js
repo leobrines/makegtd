@@ -120,9 +120,9 @@
 
     switch (step) {
       case 'actionable':
-        html += question('¿Requiere hacer algo?');
+        html += question('¿Te comprometes a hacer algo al respecto?');
         html += choice('pz-yes-actionable', '⚡', 'Sí, hay que actuar');
-        html += choice('pz-no-actionable', '🍃', 'No, no requiere acción');
+        html += choice('pz-no-actionable', '🍃', 'No, por ahora no');
         break;
 
       case 'not-actionable':
