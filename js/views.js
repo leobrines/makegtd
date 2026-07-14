@@ -646,11 +646,21 @@
     );
   }
 
-  // Editable value list for one Engage criterion (mirrors the contexts editor).
+  // Editable value list for one Engage criterion (mirrors the contexts
+  // editor, on/off toggle included: turning a criterion off hides the field
+  // across the app but keeps its values, so nothing needs to be deleted).
   function criterionEditor(key, title, placeholder) {
+    var enabled = model.criterionEnabled(key);
     var values = store.getCriterionValues(key);
     var html = '<div class="card px-4 py-4 mb-2">';
-    html += '<p class="mb-1">' + esc(title) + '</p>';
+    html += toggleRow(
+      'criterion-toggle-' + key,
+      title,
+      'Si lo desactivas, el campo desaparece de las tareas. Sus valores se conservan.',
+      enabled,
+      enabled ? ' pb-3 mb-3 border-b border-stone-100 dark:border-stone-800' : ''
+    );
+    if (!enabled) return html + '</div>';
     if (values.length) {
       html += '<ul class="mb-3">' + values.map(function (v) {
         return (
@@ -706,7 +716,7 @@
     html +=
       '<p class="text-xs text-stone-400 dark:text-stone-500 mb-2 px-1">' +
       'Tiempo, energía y prioridad ayudan a elegir la siguiente acción (junto al contexto). ' +
-      'Personaliza los valores; si vacías una lista, ese campo desaparece de las tareas.' +
+      'Personaliza los valores o desactiva los campos que no uses; lo guardado se conserva.' +
       '</p>';
     html += criterionEditor('timeEstimates', 'Tiempo estimado', 'Ej.: 45 min');
     html += criterionEditor('energyLevels', 'Nivel de energía', 'Ej.: Muy baja');
@@ -804,7 +814,8 @@
       };
       // The context select is absent while contexts are disabled; skip the
       // field so stored contexts survive a temporary toggle-off. Same for the
-      // Engage criteria selects, absent while their value list is empty.
+      // Engage criteria selects, absent while the criterion is off or its
+      // value list is empty.
       var $context = $editor.find('[data-field="context"]');
       if ($context.length) fields.context = $context.val() || null;
       ['estimate', 'energy', 'priority'].forEach(function (field) {
@@ -1081,6 +1092,15 @@
       var value = $(this).val();
       store.updateSettings({ reviewDay: value === '' ? null : Number(value) });
       toast('Guardado');
+      refresh();
+    });
+
+    $view.on('change', '[id^="criterion-toggle-"]', function () {
+      var key = this.id.replace('criterion-toggle-', '');
+      var fields = {};
+      fields[key + 'Enabled'] = this.checked;
+      store.updateSettings(fields);
+      toast(this.checked ? 'Campo activado' : 'Campo desactivado');
       refresh();
     });
 

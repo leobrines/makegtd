@@ -6,8 +6,9 @@
 
   var DEFAULT_CONTEXTS = ['@casa', '@trabajo', '@recados', '@llamadas', '@ordenador'];
 
-  // Default value lists for the Engage four-criteria model (workflow map:
-  // context, time available, energy available, priority). Each list is
+  // Default value lists for the Engage four-criteria model (GTD book,
+  // "Engaging" chapter: context, time available, energy available, priority;
+  // the vendored PDFs cover contexts but not the model itself). Each list is
   // user-editable in Settings; emptying a list hides that field everywhere.
   var DEFAULT_TIME_ESTIMATES = ['5 min', '15 min', '30 min', '1 h', '2 h+'];
   var DEFAULT_ENERGY_LEVELS = ['Alta', 'Media', 'Baja'];
@@ -53,6 +54,12 @@
         timeEstimates: DEFAULT_TIME_ESTIMATES.slice(),
         energyLevels: DEFAULT_ENERGY_LEVELS.slice(),
         priorities: DEFAULT_PRIORITIES.slice(),
+        // Per-criterion on/off switches (like contextsEnabled): turning one
+        // off hides the field everywhere but keeps its value list and the
+        // values stored on items, so re-enabling restores everything.
+        timeEstimatesEnabled: true,
+        energyLevelsEnabled: true,
+        prioritiesEnabled: true,
       },
     };
   }
