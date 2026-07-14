@@ -120,9 +120,18 @@
 
     switch (step) {
       case 'actionable':
-        html += question('¿Requiere hacer algo?');
+        html +=
+          '<div class="mb-4">' +
+          '<div class="flex items-start gap-1">' +
+          '<p class="text-lg font-medium">' + esc('¿Es accionable?') + '</p>' +
+          '<button type="button" class="w-11 h-11 -my-2 shrink-0 flex items-center justify-center" data-action="pz-help-actionable" aria-label="¿Qué es un accionable?" aria-haspopup="dialog">' +
+          '<span class="w-5 h-5 rounded-full border border-stone-300 dark:border-stone-600 text-xs font-semibold text-stone-400 dark:text-stone-500 flex items-center justify-center" aria-hidden="true">!</span>' +
+          '</button>' +
+          '</div>' +
+          '<p class="text-sm text-stone-500 dark:text-stone-400">' + esc('¿Te comprometes a hacer algo ahora?') + '</p>' +
+          '</div>';
         html += choice('pz-yes-actionable', '⚡', 'Sí, hay que actuar');
-        html += choice('pz-no-actionable', '🍃', 'No, no requiere acción');
+        html += choice('pz-no-actionable', '🍃', 'No, por ahora no');
         break;
 
       case 'not-actionable':
@@ -261,6 +270,25 @@
 
     $view.on('click', '[data-action="pz-yes-actionable"]', function () { go('steps'); });
     $view.on('click', '[data-action="pz-no-actionable"]', function () { go('not-actionable'); });
+
+    // Help popup: what "actionable" means.
+    function closeHelp() {
+      $('#actionable-help-overlay').addClass('hidden').attr('aria-hidden', 'true');
+    }
+
+    $view.on('click', '[data-action="pz-help-actionable"]', function () {
+      $('#actionable-help-overlay').removeClass('hidden').attr('aria-hidden', 'false');
+    });
+
+    $('#actionable-help-overlay').on('click', function (e) {
+      if (e.target === this) closeHelp();
+    });
+
+    $('#actionable-help-close, #actionable-help-ok').on('click', closeHelp);
+
+    $(document).on('keydown', function (e) {
+      if (e.key === 'Escape') closeHelp();
+    });
 
     $view.on('click', '[data-action="pz-back"]', function () {
       var back = {
