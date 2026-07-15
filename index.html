@@ -316,6 +316,125 @@
       </div>
     </div>
 
+    <!-- Help popup: what a "goal or objective" is (opened from the Horizons view).
+         Definition per the official "Levels of Your Work" altitude map
+         (docs/gtd/gtd-levels-of-your-work.pdf, Horizon 3). -->
+    <div id="goals-help-overlay" class="fixed inset-0 z-50 hidden bg-stone-900/40 dark:bg-black/60" aria-hidden="true">
+      <div class="max-w-lg mx-auto mt-[18vh] px-4">
+        <div
+          class="relative bg-white dark:bg-stone-900 rounded-2xl p-5 border border-stone-200 dark:border-stone-700"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="goals-help-title"
+        >
+          <button
+            id="goals-help-close"
+            type="button"
+            aria-label="Cerrar"
+            class="absolute top-1 right-1 w-11 h-11 flex items-center justify-center text-2xl leading-none text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300 transition-colors duration-150"
+          >&times;</button>
+          <h2 id="goals-help-title" class="font-semibold text-lg tracking-tight mb-2">¿Qué es una meta u objetivo?</h2>
+          <p class="text-sm text-stone-500 dark:text-stone-400 mb-4">
+            Es lo que quieres y necesitas lograr, <strong>en concreto</strong>, en los próximos
+            12–24 meses para hacer realidad tu visión. Es el puente entre la dirección
+            a largo plazo y tus proyectos de hoy.
+          </p>
+          <ol class="text-sm text-stone-500 dark:text-stone-400 mb-4 space-y-2 list-decimal pl-5">
+            <li><strong>Concreta y comprobable.</strong> Escríbela de forma que puedas decir si se cumplió: «15% más de ventas a fin de año», «terminar el grado en junio».</li>
+            <li><strong>Nace de la visión y genera proyectos.</strong> Pregúntate qué proyectos necesitas arrancar (o eliminar) para acercarte a cada meta.</li>
+            <li><strong>Revísalas cada año, recalibra cada trimestre.</strong> Ajustar una meta no es fracasar: es mantener el rumbo al día.</li>
+          </ol>
+          <div class="flex items-center justify-end">
+            <button
+              id="goals-help-ok"
+              type="button"
+              class="min-h-[44px] px-5 rounded-xl bg-accent text-white font-medium hover:bg-accent-dark transition-colors duration-150"
+            >Entendido</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Help popup: what "vision" is (opened from the Horizons view).
+         Definition per the official "Levels of Your Work" altitude map
+         (docs/gtd/gtd-levels-of-your-work.pdf, Horizon 4); the 3-5 year
+         timeframe per "The 6 Horizons of Focus" (gettingthingsdone.com). -->
+    <div id="vision-help-overlay" class="fixed inset-0 z-50 hidden bg-stone-900/40 dark:bg-black/60" aria-hidden="true">
+      <div class="max-w-lg mx-auto mt-[18vh] px-4">
+        <div
+          class="relative bg-white dark:bg-stone-900 rounded-2xl p-5 border border-stone-200 dark:border-stone-700"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="vision-help-title"
+        >
+          <button
+            id="vision-help-close"
+            type="button"
+            aria-label="Cerrar"
+            class="absolute top-1 right-1 w-11 h-11 flex items-center justify-center text-2xl leading-none text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300 transition-colors duration-150"
+          >&times;</button>
+          <h2 id="vision-help-title" class="font-semibold text-lg tracking-tight mb-2">¿Qué es la visión?</h2>
+          <p class="text-sm text-stone-500 dark:text-stone-400 mb-4">
+            Es cómo se verá, sonará y <strong>sentirá</strong> el éxito cuando lo hayas
+            conseguido: los resultados a largo plazo (3–5 años) y los escenarios ideales,
+            en tu trabajo y en tu vida.
+          </p>
+          <ol class="text-sm text-stone-500 dark:text-stone-400 mb-4 space-y-2 list-decimal pl-5">
+            <li><strong>Describe el escenario ideal.</strong> Píntalo con detalle, como si ya fuera real: «el taller de referencia de la comarca, un lugar donde da gusto comprar».</li>
+            <li><strong>Da dirección a las metas.</strong> De la visión salen los objetivos de 12–24 meses; si una meta no te acerca a ella, sobra.</li>
+            <li><strong>No tiene calendario fijo.</strong> Vuelve a ella cuando necesites claridad, dirección, alineación o motivación.</li>
+          </ol>
+          <div class="flex items-center justify-end">
+            <button
+              id="vision-help-ok"
+              type="button"
+              class="min-h-[44px] px-5 rounded-xl bg-accent text-white font-medium hover:bg-accent-dark transition-colors duration-150"
+            >Entendido</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Help popup: what "purpose and principles" are (opened from the Horizons view).
+         Definition per the official "Levels of Your Work" altitude map
+         (docs/gtd/gtd-levels-of-your-work.pdf, Horizon 5 and the top-down
+         priorities rule). -->
+    <div id="purpose-help-overlay" class="fixed inset-0 z-50 hidden bg-stone-900/40 dark:bg-black/60" aria-hidden="true">
+      <div class="max-w-lg mx-auto mt-[18vh] px-4">
+        <div
+          class="relative bg-white dark:bg-stone-900 rounded-2xl p-5 border border-stone-200 dark:border-stone-700"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="purpose-help-title"
+        >
+          <button
+            id="purpose-help-close"
+            type="button"
+            aria-label="Cerrar"
+            class="absolute top-1 right-1 w-11 h-11 flex items-center justify-center text-2xl leading-none text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300 transition-colors duration-150"
+          >&times;</button>
+          <h2 id="purpose-help-title" class="font-semibold text-lg tracking-tight mb-2">¿Qué son el propósito y los principios?</h2>
+          <p class="text-sm text-stone-500 dark:text-stone-400 mb-4">
+            El propósito es la <strong>intención última</strong> de lo que haces —¿por qué
+            existe esto?— y los principios son los estándares y comportamientos críticos
+            para que tenga éxito. Es el horizonte más alto: de él baja todo lo demás.
+          </p>
+          <ol class="text-sm text-stone-500 dark:text-stone-400 mb-4 space-y-2 list-decimal pl-5">
+            <li><strong>El propósito responde al porqué.</strong> «Ayudar a otros a lograr sus sueños», «ofrecer el mejor producto a clientes encantados». Si no sabes el porqué, todo lo demás cojea.</li>
+            <li><strong>Los principios marcan lo innegociable.</strong> Cómo tratas a la gente, la calidad que no rebajas, cómo quieres trabajar y vivir.</li>
+            <li><strong>Ordena todo lo demás.</strong> Propósito → visión → metas → áreas → proyectos → acciones. Revísalo cuando necesites claridad, dirección o motivación.</li>
+          </ol>
+          <div class="flex items-center justify-end">
+            <button
+              id="purpose-help-ok"
+              type="button"
+              class="min-h-[44px] px-5 rounded-xl bg-accent text-white font-medium hover:bg-accent-dark transition-colors duration-150"
+            >Entendido</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Transient confirmation toast -->
     <div
       id="toast"

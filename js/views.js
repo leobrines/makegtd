@@ -541,7 +541,7 @@
       var entries = model.horizonItems(h.level);
       html += sectionTitle(
         'Horizonte ' + h.level + ' · ' + h.title,
-        h.help ? helpIcon('help-areas', '¿Qué es un área de enfoque y responsabilidad?') : ''
+        helpIcon(h.helpAction, h.helpLabel)
       );
       html += '<p class="text-xs text-stone-400 dark:text-stone-500 mb-2 px-1">' + esc(h.description) + '</p>';
       if (entries.length) {
@@ -938,23 +938,29 @@
       refresh();
     });
 
-    // Help popup: what an "area of focus and accountability" is (Horizons view).
-    function closeAreasHelp() {
-      $('#areas-help-overlay').addClass('hidden').attr('aria-hidden', 'true');
-    }
+    // Help popups of the Horizons view, one per horizon level (2-5). Each
+    // helpAction in model.HORIZONS maps to its overlay: help-areas ->
+    // #areas-help-overlay, and so on with -close/-ok button ids.
+    ['areas', 'goals', 'vision', 'purpose'].forEach(function (key) {
+      var $overlay = $('#' + key + '-help-overlay');
 
-    $view.on('click', '[data-action="help-areas"]', function () {
-      $('#areas-help-overlay').removeClass('hidden').attr('aria-hidden', 'false');
-    });
+      function close() {
+        $overlay.addClass('hidden').attr('aria-hidden', 'true');
+      }
 
-    $('#areas-help-overlay').on('click', function (e) {
-      if (e.target === this) closeAreasHelp();
-    });
+      $view.on('click', '[data-action="help-' + key + '"]', function () {
+        $overlay.removeClass('hidden').attr('aria-hidden', 'false');
+      });
 
-    $('#areas-help-close, #areas-help-ok').on('click', closeAreasHelp);
+      $overlay.on('click', function (e) {
+        if (e.target === this) close();
+      });
 
-    $(document).on('keydown', function (e) {
-      if (e.key === 'Escape') closeAreasHelp();
+      $('#' + key + '-help-close, #' + key + '-help-ok').on('click', close);
+
+      $(document).on('keydown', function (e) {
+        if (e.key === 'Escape') close();
+      });
     });
 
     // Projects.
