@@ -44,6 +44,10 @@
         // Reference is a canonical section but may live outside the app; this
         // flag hides the list, the nav entry and the Clarify choice when false.
         referenceEnabled: true,
+        // Higher horizons (2-5) are optional until ground level is under
+        // control; this flag hides the view and its nav entry when false.
+        // Stored entries are kept.
+        horizonsEnabled: true,
         // "Add to Google Calendar" buttons (the app's only outward link).
         gcalEnabled: true,
         // Global 'n' keyboard shortcut for quick capture (the FAB always works).
