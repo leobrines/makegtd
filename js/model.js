@@ -32,29 +32,20 @@
   // Horizon 1 (projects) already have their own views, so they are not here.
   // Definitions, timeframes and review cadences follow the official document;
   // Horizon 4's 3-5 year timeframe comes from "The 6 Horizons of Focus"
-  // (gettingthingsdone.com). Rendered top of the page first = Horizon 2, the
-  // level closest to your projects.
+  // (gettingthingsdone.com). Rendered top-down like the official altitude map
+  // (Horizon 5 first): purpose drives vision, vision creates goals, goals
+  // frame areas — the view reads in the order priorities flow.
   var HORIZONS = [
     {
-      level: 2,
-      title: 'Áreas de enfoque y responsabilidad',
+      level: 5,
+      title: 'Propósito y principios',
       description:
-        'Las esferas importantes de tu trabajo y tu vida que debes mantener en buen estado ' +
-        'para que «el motor siga funcionando». No se terminan: se mantienen. ' +
-        'Revísalas una vez al mes o cuando tu trabajo o tu vida cambien.',
-      placeholder: 'Ej.: Salud · Finanzas · Familia · Ventas…',
-      helpAction: 'help-areas',
-      helpLabel: '¿Qué es un área de enfoque y responsabilidad?',
-    },
-    {
-      level: 3,
-      title: 'Metas y objetivos',
-      description:
-        '¿Qué quieres y necesitas lograr, en concreto, en los próximos 12–24 meses ' +
-        'para hacer realidad tu visión? Revísalas cada año y recalibra cada trimestre.',
-      placeholder: 'Ej.: Terminar el grado antes de junio',
-      helpAction: 'help-goals',
-      helpLabel: '¿Qué es una meta u objetivo?',
+        'La intención última de lo que haces y los estándares para su éxito. ' +
+        '¿Por qué lo haces? ¿Qué comportamientos son innegociables? ' +
+        'Revísalo cuando necesites claridad, dirección o motivación.',
+      placeholder: 'Ej.: Ayudar a otros a lograr sus sueños',
+      helpAction: 'help-purpose',
+      helpLabel: '¿Qué son el propósito y los principios?',
     },
     {
       level: 4,
@@ -67,15 +58,25 @@
       helpLabel: '¿Qué es la visión?',
     },
     {
-      level: 5,
-      title: 'Propósito y principios',
+      level: 3,
+      title: 'Metas y objetivos',
       description:
-        'La intención última de lo que haces y los estándares para su éxito. ' +
-        '¿Por qué lo haces? ¿Qué comportamientos son innegociables? ' +
-        'Revísalo cuando necesites claridad, dirección o motivación.',
-      placeholder: 'Ej.: Ayudar a otros a lograr sus sueños',
-      helpAction: 'help-purpose',
-      helpLabel: '¿Qué son el propósito y los principios?',
+        '¿Qué quieres y necesitas lograr, en concreto, en los próximos 12–24 meses ' +
+        'para hacer realidad tu visión? Revísalas cada año y recalibra cada trimestre.',
+      placeholder: 'Ej.: Terminar el grado antes de junio',
+      helpAction: 'help-goals',
+      helpLabel: '¿Qué es una meta u objetivo?',
+    },
+    {
+      level: 2,
+      title: 'Áreas de enfoque y responsabilidad',
+      description:
+        'Las esferas importantes de tu trabajo y tu vida que debes mantener en buen estado ' +
+        'para que «el motor siga funcionando». No se terminan: se mantienen. ' +
+        'Revísalas una vez al mes o cuando tu trabajo o tu vida cambien.',
+      placeholder: 'Ej.: Salud · Finanzas · Familia · Ventas…',
+      helpAction: 'help-areas',
+      helpLabel: '¿Qué es un área de enfoque y responsabilidad?',
     },
   ];
 
@@ -246,6 +247,14 @@
   // Whether the "add to Google Calendar" buttons are shown.
   function gcalEnabled() {
     return store.getSettings().gcalEnabled !== false;
+  }
+
+  // Whether the Horizons view (levels 2-5) is on. Higher horizons are worth
+  // formalizing once ground level and projects are under control (Levels of
+  // Your Work); until then the view can be hidden. Stored entries are kept,
+  // so re-enabling brings everything back untouched.
+  function horizonsEnabled() {
+    return store.getSettings().horizonsEnabled !== false;
   }
 
   // Whether the global 'n' quick-capture shortcut is on (the FAB always works).
@@ -467,6 +476,7 @@
     contextsEnabled: contextsEnabled,
     referenceEnabled: referenceEnabled,
     gcalEnabled: gcalEnabled,
+    horizonsEnabled: horizonsEnabled,
     captureShortcutEnabled: captureShortcutEnabled,
     criterionEnabled: criterionEnabled,
     timeEstimates: timeEstimates,

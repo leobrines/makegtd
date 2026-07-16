@@ -747,6 +747,12 @@
       model.referenceEnabled()
     );
     html += toggleRow(
+      'horizons-enabled-toggle',
+      'Horizontes',
+      'La perspectiva por encima de tus proyectos (áreas, metas, visión, propósito). Si aún no la usas, ocúltala; lo guardado se conserva.',
+      model.horizonsEnabled()
+    );
+    html += toggleRow(
       'gcal-enabled-toggle',
       'Botones de Google Calendar',
       'Muestra u oculta los botones para añadir tareas con fecha a Google Calendar.',
@@ -1079,6 +1085,12 @@
     $view.on('change', '#reference-enabled-toggle', function () {
       store.updateSettings({ referenceEnabled: this.checked });
       toast(this.checked ? 'Lista de referencia activada' : 'Lista de referencia desactivada');
+      refresh();
+    });
+
+    $view.on('change', '#horizons-enabled-toggle', function () {
+      store.updateSettings({ horizonsEnabled: this.checked });
+      toast(this.checked ? 'Horizontes activados' : 'Horizontes desactivados');
       refresh();
     });
 

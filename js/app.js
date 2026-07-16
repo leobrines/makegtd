@@ -65,10 +65,12 @@
     return hash || '/hoy';
   }
 
-  // Nav entries hidden by a feature toggle (the Reference list is optional).
+  // Nav entries hidden by a feature toggle (Reference and Horizons are optional).
   function visibleNav(items) {
     return items.filter(function (item) {
-      return item.path !== '/referencia' || model.referenceEnabled();
+      if (item.path === '/referencia') return model.referenceEnabled();
+      if (item.path === '/horizontes') return model.horizonsEnabled();
+      return true;
     });
   }
 
@@ -175,6 +177,7 @@
 
     var renderer = ROUTES[path];
     if (path === '/referencia' && !model.referenceEnabled()) renderer = null;
+    if (path === '/horizontes' && !model.horizonsEnabled()) renderer = null;
     if (!renderer && path.indexOf('/proyectos/') === 0) {
       var projectId = path.slice('/proyectos/'.length);
       renderer = function () { return views.renderProjectDetail(projectId); };
