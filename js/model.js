@@ -43,7 +43,8 @@
         'para que «el motor siga funcionando». No se terminan: se mantienen. ' +
         'Revísalas una vez al mes o cuando tu trabajo o tu vida cambien.',
       placeholder: 'Ej.: Salud · Finanzas · Familia · Ventas…',
-      help: true,
+      helpAction: 'help-areas',
+      helpLabel: '¿Qué es un área de enfoque y responsabilidad?',
     },
     {
       level: 3,
@@ -52,6 +53,8 @@
         '¿Qué quieres y necesitas lograr, en concreto, en los próximos 12–24 meses ' +
         'para hacer realidad tu visión? Revísalas cada año y recalibra cada trimestre.',
       placeholder: 'Ej.: Terminar el grado antes de junio',
+      helpAction: 'help-goals',
+      helpLabel: '¿Qué es una meta u objetivo?',
     },
     {
       level: 4,
@@ -60,6 +63,8 @@
         'Cómo se verá, sonará y sentirá el éxito a 3–5 años: resultados a largo plazo ' +
         'y escenarios ideales. Revísala cuando necesites claridad, dirección o motivación.',
       placeholder: 'Ej.: Vivir del taller propio en el campo',
+      helpAction: 'help-vision',
+      helpLabel: '¿Qué es la visión?',
     },
     {
       level: 5,
@@ -69,6 +74,8 @@
         '¿Por qué lo haces? ¿Qué comportamientos son innegociables? ' +
         'Revísalo cuando necesites claridad, dirección o motivación.',
       placeholder: 'Ej.: Ayudar a otros a lograr sus sueños',
+      helpAction: 'help-purpose',
+      helpLabel: '¿Qué son el propósito y los principios?',
     },
   ];
 
