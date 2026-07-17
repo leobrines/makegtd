@@ -388,30 +388,39 @@
   // ---- Boot ----
 
   $(function () {
-    store.load();
-    views.bind();
-    global.GTD.process.bind();
-    global.GTD.review.bind();
-    bindCapture();
-    bindInstallPopup();
+    // Persistence is async (IndexedDB): nothing may touch the store until
+    // init() resolves. It never rejects — it falls back to localStorage.
+    store.init().then(function () {
+      views.bind();
+      global.GTD.process.bind();
+      global.GTD.review.bind();
+      bindCapture();
+      bindInstallPopup();
 
-    $('#bottom-nav').on('click', '#more-button', function () {
-      moreOpen = !moreOpen;
-      renderBottomNav();
-    });
-    $('#bottom-nav').on('click', 'a', function () {
-      moreOpen = false;
-    });
-
-    $(window).on('hashchange', render);
-    if (!location.hash) location.hash = '#/hoy';
-    render();
-
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js').catch(function () {
-        // Offline support is progressive enhancement; the app still works without it.
+      $('#bottom-nav').on('click', '#more-button', function () {
+        moreOpen = !moreOpen;
+        renderBottomNav();
       });
-    }
+      $('#bottom-nav').on('click', 'a', function () {
+        moreOpen = false;
+      });
+
+      $(window).on('hashchange', render);
+      if (!location.hash) location.hash = '#/hoy';
+      render();
+
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js').catch(function () {
+          // Offline support is progressive enhancement; the app still works without it.
+        });
+      }
+
+      // Ask the browser to never evict this origin's storage under disk
+      // pressure (granted silently to installed PWAs; harmless if denied).
+      if (navigator.storage && navigator.storage.persist) {
+        navigator.storage.persist().catch(function () {});
+      }
+    });
   });
 
   global.GTD.app = {

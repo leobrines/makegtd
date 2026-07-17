@@ -2,7 +2,7 @@
 
 An installable, offline-first PWA implementing the full [Getting Things Done®](https://gettingthingsdone.com/) workflow end to end — Capture → Clarify → Organize → Reflect → Engage — with a minimalist, ADHD-friendly Spanish UI.
 
-No backend, no framework: vanilla JavaScript + jQuery, Tailwind CSS compiled to a static stylesheet, and `localStorage` for persistence. Everything runs in the browser and works fully offline once installed.
+No backend, no framework: vanilla JavaScript + jQuery, Tailwind CSS compiled to a static stylesheet, and IndexedDB for persistence. Everything runs in the browser and works fully offline once installed.
 
 ## Features
 
@@ -40,6 +40,6 @@ Then open `http://localhost:8080`. The compiled `css/styles.css` is committed, s
 
 ## Notes
 
-- All data stays in `localStorage` on the device (single versioned key `gtd:data:v1`). Use Ajustes → Exportar for backups.
+- All data stays on the device, in IndexedDB (a single versioned document written atomically; data from older versions stored in `localStorage` is migrated automatically). The app requests persistent storage so the browser does not evict it. Use Ajustes → Exportar for backups.
 - Bump `CACHE_VERSION` in `sw.js` whenever a precached asset changes.
 - Code, comments, and commits are in English; all user-facing UI text is in Spanish (see `CLAUDE.md`).

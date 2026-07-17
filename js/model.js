@@ -200,8 +200,12 @@
     var settings = store.getSettings();
     var today = todayISO();
     if (settings.focusDate !== today) {
+      var now = new Date().toISOString();
       store.getItems().forEach(function (item) {
-        if (item.isFocus) item.isFocus = false;
+        if (item.isFocus) {
+          item.isFocus = false;
+          item.updatedAt = now;
+        }
       });
       store.updateSettings({ focusDate: today });
     }
@@ -378,6 +382,7 @@
       if (item.status === STATUS.SOMEDAY && item.tickleDate && item.tickleDate <= today) {
         item.status = STATUS.INBOX;
         item.tickleDate = null;
+        item.updatedAt = new Date().toISOString();
         changed = true;
       }
     });
