@@ -778,23 +778,29 @@
       html +=
         '<details class="text-sm">' +
         '<summary class="cursor-pointer min-h-[44px] flex items-center text-accent">Guía: crear tu acceso en Google (una sola vez)</summary>' +
-        '<ol class="list-decimal ml-5 space-y-2 mt-2 text-stone-600 dark:text-stone-300">' +
-        '<li>Abre <code>console.cloud.google.com</code> con tu cuenta de Google. Desde el móvil usa el navegador ' +
-        '(la app de Google Cloud no permite crear credenciales); si algo no aparece, activa «Versión para ordenador».</li>' +
-        '<li>Crea un proyecto nuevo (nombre libre, p. ej. «makegtd»).</li>' +
-        '<li>Menú ☰ → «APIs y servicios» → «Biblioteca»: busca «Google Drive API» y pulsa «Habilitar».</li>' +
-        '<li>Menú ☰ → «Google Auth Platform»: completa el registro inicial (nombre de la app, tu correo, público ' +
-        '«Externo»/External). Después, en «Audience»/«Público», pulsa «Publicar aplicación» («Publish app»): ' +
-        'el permiso que usa makeGTD (solo los datos de la propia app en tu Drive) no es sensible y no requiere ' +
-        'verificación de Google. Si prefieres dejarla en modo «Testing», añade tu correo como usuario de prueba, ' +
-        'pero tendrás que volver a autorizar cada 7 días.</li>' +
-        '<li>En «Google Auth Platform» → «Clientes»/«Clients» pulsa «Crear cliente»: tipo «Aplicación web». ' +
-        'En «Orígenes de JavaScript autorizados» añade:<br />' +
+        '<p class="text-xs text-stone-400 dark:text-stone-500 mt-2 mb-2">' +
+        'Cada enlace abre la página exacta de la consola de Google; inicia sesión con tu cuenta. ' +
+        'Desde el móvil usa el navegador (la app de Google Cloud no permite crear credenciales); ' +
+        'si algo no aparece, activa «Versión para ordenador».' +
+        '</p>' +
+        '<ol class="list-decimal ml-5 space-y-2 text-stone-600 dark:text-stone-300">' +
+        '<li><a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noopener" class="text-accent underline">Crea un proyecto nuevo</a> ' +
+        '(nombre libre, p. ej. «makegtd»).</li>' +
+        '<li><a href="https://console.cloud.google.com/apis/library/drive.googleapis.com" target="_blank" rel="noopener" class="text-accent underline">Habilita la Google Drive API</a> ' +
+        'en ese proyecto (botón «Habilitar»).</li>' +
+        '<li><a href="https://console.cloud.google.com/auth/overview/create" target="_blank" rel="noopener" class="text-accent underline">Registra la app en Google Auth Platform</a>: ' +
+        'nombre de la app, tu correo y público «Externo»/External.</li>' +
+        '<li><a href="https://console.cloud.google.com/auth/clients/create" target="_blank" rel="noopener" class="text-accent underline">Crea el cliente OAuth</a>: ' +
+        'tipo «Aplicación web». En «Orígenes de JavaScript autorizados» añade:<br />' +
         '<code class="break-all">' + esc(syncStatus.origin) + '</code> ' +
         '<button type="button" class="btn-ghost" data-action="copy-value" data-value="' + esc(syncStatus.origin) + '">Copiar</button><br />' +
         'y en «URI de redireccionamiento autorizados» añade:<br />' +
         '<code class="break-all">' + esc(syncStatus.redirectUri) + '</code> ' +
         '<button type="button" class="btn-ghost" data-action="copy-value" data-value="' + esc(syncStatus.redirectUri) + '">Copiar</button></li>' +
+        '<li><a href="https://console.cloud.google.com/auth/audience" target="_blank" rel="noopener" class="text-accent underline">Publica la aplicación</a> ' +
+        '(«Publish app»): el permiso que usa makeGTD (solo los datos de la propia app en tu Drive) no es sensible ' +
+        'y no requiere verificación de Google. Si prefieres dejarla en modo «Testing», añade tu correo como usuario ' +
+        'de prueba, pero tendrás que volver a autorizar cada 7 días.</li>' +
         '<li>Copia el «ID de cliente» (termina en <code>.apps.googleusercontent.com</code>) y pégalo aquí abajo. ' +
         'Los cambios en Google pueden tardar unos minutos en activarse.</li>' +
         '</ol></details>';
@@ -808,10 +814,16 @@
         '<label class="block">' +
         '<span class="block">Frase de cifrado</span>' +
         '<span class="block text-xs text-stone-400 dark:text-stone-500 mt-0.5 mb-1">' +
-        'Usa la misma frase en todos tus dispositivos. No se puede recuperar: si la olvidas, la copia remota ' +
-        'será ilegible (tus dispositivos conservan sus datos).' +
+        'Una contraseña que inventas tú (no es de Google): con ella se cifran tus datos en este dispositivo ' +
+        'antes de subirse a Drive. Elige una larga —varias palabras que recuerdes— o genera una segura con el ' +
+        'botón y guárdala en tu gestor de contraseñas. Tendrás que escribir la misma en cada dispositivo que ' +
+        'conectes. No se puede recuperar: si la olvidas, la copia remota será ilegible (tus dispositivos ' +
+        'conservan sus datos).' +
         '</span>' +
-        '<input type="password" id="sync-passphrase" class="field" autocomplete="new-password" />' +
+        '<span class="flex gap-2">' +
+        '<input type="password" id="sync-passphrase" class="field flex-1" autocomplete="new-password" />' +
+        '<button type="button" class="btn-secondary" data-action="sync-generate-passphrase">Generar</button>' +
+        '</span>' +
         '</label>';
       html += '<button type="submit" class="btn-primary">Guardar y conectar con Google</button>';
       html += '</form>';
@@ -1267,6 +1279,20 @@
     });
 
     $view.on('click', '[data-action="sync-now"]', syncNow);
+
+    // Fills the field with a strong random phrase (~79 bits; confusable
+    // characters excluded) and reveals it so the user can write it down.
+    $view.on('click', '[data-action="sync-generate-passphrase"]', function () {
+      var alphabet = 'abcdefghjkmnpqrstuvwxyz23456789';
+      var bytes = global.crypto.getRandomValues(new Uint8Array(16));
+      var phrase = Array.prototype.map
+        .call(bytes, function (b, i) {
+          return alphabet[b % alphabet.length] + (i % 4 === 3 && i < 15 ? '-' : '');
+        })
+        .join('');
+      $('#sync-passphrase').attr('type', 'text').val(phrase);
+      toast('Frase generada: guárdala antes de continuar');
+    });
 
     $view.on('click', '[data-action="sync-disconnect"]', function () {
       if (!global.confirm('¿Desconectar la sincronización en este dispositivo? Tus datos locales se conservan; la copia en Drive no se borra.')) return;
