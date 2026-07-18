@@ -46,7 +46,8 @@ silently implementing it.
 npm install            # once, installs tailwindcss (dev-only)
 npm run build:css      # regenerate css/styles.css (required after changing any Tailwind classes)
 npm run watch:css      # same, in watch mode
-npm test               # unit tests for the sync merge engine and crypto layer (plain Node, no framework)
+npm test               # unit tests for the sync engine, crypto layer and transports (plain Node, no framework)
+ACCESS_KEY=<key> node server/sync-server.js   # optional zero-dependency reference sync server (see server/README.md)
 python3 -m http.server 8080   # serve locally (service workers need http://localhost, not file://)
 ```
 
@@ -58,12 +59,14 @@ Scripts share a single global namespace `GTD` and are loaded in this order (orde
 2. `js/store.js` — persistence layer (IndexedDB, localStorage fallback): async `init()` required before any access, then synchronous in-memory state with atomic whole-state writes; CRUD for items/projects/contexts, JSON export/import, tombstones for permanent deletions.
 3. `js/sync.js` — pure state-merge engine for multi-device sync: `GTD.sync.merge(docs)` resolves entities last-writer-wins by `updatedAt` and applies tombstones, deterministically and without I/O or clock reads. Unit-tested via `npm test` (`test/sync.test.js`, plain Node, no framework); run it after touching merge semantics.
 4. `js/crypto.js` — end-to-end encryption for sync payloads: `GTD.crypto.encryptString/decryptString` (native WebCrypto, PBKDF2-SHA256 + AES-256-GCM, self-describing JSON envelope, passphrase never stored server-side). Unit-tested via `npm test` (`test/crypto.test.js`).
-5. `js/drive.js` — opt-in Google Drive sync transport + orchestration: OAuth 2.0 implicit flow (full-page redirect to `accounts.google.com`, no external scripts — GIS is a CDN load and stays banned), encrypted per-device files (`gtd-device-<id>.json`) in the user's `appDataFolder` via the Drive REST v3 API, merge through `GTD.sync.merge`. Each user brings their own OAuth Client ID (the Settings view has the step-by-step guide). Device-local keys (`localStorage`: `gtd:device-id`, `gtd:sync:gdrive` — includes the passphrase, deliberately device-local — and `gtd:sync:last`; `sessionStorage`: token + OAuth state) are never part of the synced document. `app.js` must call `GTD.drive.handleRedirect()` at boot before the router reads `location.hash`. Pure helpers unit-tested via `npm test` (`test/drive.test.js`).
-6. `js/model.js` — domain constants (item statuses, labels), factories, pure helpers (overdue/scheduled-today queries, projects without a next action, focus limit).
-7. `js/views.js` — render functions for each view (jQuery-built DOM).
-8. `js/process.js` — the Clarify wizard (GTD decision tree, one item and one decision at a time).
-9. `js/review.js` — the guided weekly review wizard.
-10. `js/app.js` — hash router (`#/hoy`, `#/entrada`, …), navigation shell, global quick-capture, service worker registration.
+5. `js/syncer.js` — provider-agnostic sync core: single active backend chosen in Settings, one transport interface (`ensureAuth/list/download/upload`), shared orchestration (encrypted per-device files `gtd-device-<id>.json`, decrypt via `GTD.crypto`, merge via `GTD.sync.merge`, re-upload), plus the password-encrypted key file (export/import) for the self-hosted provider. Device-local keys (`localStorage`: `gtd:device-id`, `gtd:sync:config` — includes the passphrase, deliberately device-local — and `gtd:sync:last`) are never part of the synced document. Pure helpers unit-tested via `npm test` (`test/syncer.test.js`).
+6. `js/drive.js` — Google Drive transport: OAuth 2.0 implicit flow (full-page redirect to `accounts.google.com`, no external scripts — GIS is a CDN load and stays banned; token + OAuth state in `sessionStorage`), Drive REST v3 against the user's `appDataFolder`. Each user brings their own OAuth Client ID (the Settings view has the step-by-step guide). `app.js` must call `GTD.drive.handleRedirect()` at boot before the router reads `location.hash`. Unit-tested via `npm test` (`test/drive.test.js`).
+7. `js/server.js` — self-hosted sync server transport: bearer-key HTTP against the tiny makegtd sync protocol (`GET/PUT {base}/gtd/files[/name]`), configured like a proxy (URL + access key) or via the key file. Reference server + protocol spec live in `server/` (zero-dependency Node, not part of the app). Unit-tested via `npm test` (`test/server.test.js`).
+8. `js/model.js` — domain constants (item statuses, labels), factories, pure helpers (overdue/scheduled-today queries, projects without a next action, focus limit).
+9. `js/views.js` — render functions for each view (jQuery-built DOM).
+10. `js/process.js` — the Clarify wizard (GTD decision tree, one item and one decision at a time).
+11. `js/review.js` — the guided weekly review wizard.
+12. `js/app.js` — hash router (`#/hoy`, `#/entrada`, …), navigation shell, global quick-capture, service worker registration.
 
 ### Data model
 
@@ -80,7 +83,7 @@ Sync-readiness invariants (preserve them in any change): every entity (item, pro
   `history` entries and handle `popstate` so hardware back undoes exactly one step,
   same as the in-app "Volver atrás" button. See the history integration in
   `js/process.js` for the reference implementation.
-- No new runtime dependencies. No CDN URLs anywhere. Two exceptions, both optional and user-initiated, neither loading any script/asset: (1) the "add to Google Calendar" buttons open an external `calendar.google.com/calendar/render?action=TEMPLATE` URL in a new tab; (2) the opt-in Drive sync navigates to `accounts.google.com` for OAuth and `fetch`es `www.googleapis.com`, and its setup guide links out to `console.cloud.google.com` pages — the app itself stays fully offline-functional when sync is off or unreachable.
+- No new runtime dependencies. No CDN URLs anywhere. Two exceptions, both optional and user-initiated, neither loading any script/asset: (1) the "add to Google Calendar" buttons open an external `calendar.google.com/calendar/render?action=TEMPLATE` URL in a new tab; (2) the opt-in sync talks to the chosen backend — `accounts.google.com`/`www.googleapis.com` for Google Drive (the setup guide links out to `console.cloud.google.com` pages), or the user-configured self-hosted server URL — and the app itself stays fully offline-functional when sync is off or unreachable.
 - Dates are stored as ISO strings; day-level comparisons use local dates (`YYYY-MM-DD`), not UTC.
 
 ## UI/UX principles (minimalist, ADHD-friendly)
