@@ -433,10 +433,16 @@
           global.GTD.syncer
             .sync()
             .then(function (result) {
-              if (result && result.ok) {
+              if (!result || result.redirecting) return;
+              if (result.ok) {
                 toast('Sincronizado ✅');
-                refresh();
+              } else {
+                var failed = result.results.filter(function (r) {
+                  return !r.ok;
+                })[0];
+                toast(views.syncBackendLabel(failed.provider) + ': ' + views.syncErrorMessage(failed.error));
               }
+              refresh();
             })
             .catch(function (err) {
               toast(views.syncErrorMessage(err));

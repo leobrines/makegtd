@@ -769,11 +769,81 @@
     html += sectionTitle('Sincronización entre dispositivos');
     html += '<div class="card px-4 py-4 space-y-3">';
     var syncStatus = global.GTD.syncer.status();
+    // Which setup form (if any) is shown: the picker's choice on a fresh
+    // setup, or the backend being added to an already-configured device.
+    var formProvider = null;
     if (!syncStatus.configured) {
+      formProvider = syncProvider;
+    } else if (syncAddProvider === 'gdrive' && !syncStatus.hasGdrive) {
+      formProvider = 'gdrive';
+    } else if (syncAddProvider === 'server' && !syncStatus.hasServer) {
+      formProvider = 'server';
+    }
+
+    if (syncStatus.configured) {
+      // One block per connected backend; both can be active at once and the
+      // deterministic merge keeps them convergent (a device connected to
+      // both bridges devices that only use one).
+      syncStatus.backends.forEach(function (b) {
+        var lastText = b.lastSyncAt
+          ? 'Última sincronización: ' + model.formatDate(b.lastSyncAt) + '.'
+          : 'Aún sin sincronizar.';
+        html += '<div class="space-y-2">';
+        if (b.provider === 'gdrive') {
+          html += '<p class="text-sm text-stone-500 dark:text-stone-400">Conectado a tu Google Drive. ' + lastText + '</p>';
+          html +=
+            '<p class="text-xs text-stone-400 dark:text-stone-500">' +
+            'Tus datos se suben cifrados a la carpeta de datos de aplicaciones de tu Google Drive ' +
+            '(<code>appDataFolder</code>), que no aparece entre tus archivos. Cada dispositivo guarda ' +
+            'ahí su propio archivo; el de este es <code class="break-all">' + esc(syncStatus.fileName) + '</code>. ' +
+            'Puedes ver el espacio que ocupa o borrarla en «Gestionar aplicaciones», dentro de ' +
+            '<a href="https://drive.google.com/drive/settings" target="_blank" rel="noopener" class="text-accent underline">los ajustes de Google Drive en la web</a>. ' +
+            'La app móvil de Drive no tiene esa opción: abre el enlace en un navegador (si no aparece, ' +
+            'activa «Versión para ordenador»).' +
+            '</p>';
+          html +=
+            '<p class="text-xs text-stone-400 dark:text-stone-500">' +
+            'Si tu proyecto de Google sigue en modo «Testing», te pedirá autorizar de nuevo cada 7 días; ' +
+            'publícalo en producción para evitarlo.' +
+            '</p>';
+        } else {
+          html +=
+            '<p class="text-sm text-stone-500 dark:text-stone-400">Conectado a tu servidor ' +
+            '(<code class="break-all">' + esc(b.serverUrl || '') + '</code>). ' + lastText + '</p>';
+          html +=
+            '<p class="text-xs text-stone-400 dark:text-stone-500">' +
+            'Cada dispositivo guarda su propio archivo cifrado en el servidor; el de este es ' +
+            '<code class="break-all">' + esc(syncStatus.fileName) + '</code>. ' +
+            'El archivo de llave (protegido con contraseña) configura tus otros dispositivos sin teclear nada.' +
+            '</p>';
+        }
+        html += '<div class="flex flex-wrap gap-2">';
+        if (b.provider === 'server') {
+          html += '<button type="button" class="btn-secondary" data-action="sync-export-key">Descargar archivo de llave…</button>';
+        }
+        html +=
+          '<button type="button" class="btn-ghost text-red-500 dark:text-red-400" data-action="sync-remove-backend" data-provider="' +
+          b.provider + '">Quitar este destino…</button>';
+        html += '</div></div>';
+      });
+      html += '<div class="flex flex-wrap gap-2">';
+      html += '<button type="button" class="btn-secondary" data-action="sync-now">Sincronizar ahora</button>';
+      if (!formProvider) {
+        // A second, redundant destination: same encrypted files everywhere.
+        if (!syncStatus.hasGdrive) {
+          html += '<button type="button" class="btn-secondary" data-action="sync-add-backend" data-provider="gdrive">Añadir Google Drive</button>';
+        }
+        if (!syncStatus.hasServer) {
+          html += '<button type="button" class="btn-secondary" data-action="sync-add-backend" data-provider="server">Añadir servidor propio</button>';
+        }
+      }
+      html += '</div>';
+    } else {
       html +=
         '<p class="text-sm text-stone-500 dark:text-stone-400">' +
         'Opcional: guarda una copia cifrada de tus datos y mantén makeGTD igual en tu móvil, portátil u otros ' +
-        'dispositivos. Los datos se cifran en este dispositivo antes de subirse: el destino nunca puede leerlos.' +
+        'dispositivos. Los datos se cifran en este dispositivo antes de subirse: el destino nunca puede leerlos. ' +
+        'Puedes activar más de un destino después.' +
         '</p>';
       html +=
         '<label class="block">' +
@@ -783,7 +853,8 @@
         '<option value="server"' + (syncProvider === 'server' ? ' selected' : '') + '>Servidor propio (autoalojado)</option>' +
         '</select>' +
         '</label>';
-      if (syncProvider === 'server') {
+    }
+    if (formProvider === 'server') {
         html +=
           '<p class="text-xs text-stone-400 dark:text-stone-500">' +
           'Un servidor pequeño y portable que guarda tus copias cifradas. En la carpeta ' +
@@ -793,7 +864,7 @@
           'o importa el archivo de llave exportado desde otro dispositivo ya conectado.' +
           '</p>';
       }
-      if (syncProvider === 'gdrive') html +=
+      if (formProvider === 'gdrive') html +=
         '<details class="text-sm">' +
         '<summary class="cursor-pointer min-h-[44px] flex items-center text-accent">Guía: crear tu acceso en Google (una sola vez)</summary>' +
         '<p class="text-xs text-stone-400 dark:text-stone-500 mt-2 mb-2">' +
@@ -822,8 +893,9 @@
         '<li>Copia el «ID de cliente» (termina en <code>.apps.googleusercontent.com</code>) y pégalo aquí abajo. ' +
         'Los cambios en Google pueden tardar unos minutos en activarse.</li>' +
         '</ol></details>';
+    if (formProvider) {
       html += '<form id="sync-config-form" class="space-y-3">';
-      if (syncProvider === 'gdrive') {
+      if (formProvider === 'gdrive') {
         html +=
           '<label class="block">' +
           '<span class="block">ID de cliente de Google</span>' +
@@ -851,69 +923,36 @@
       // Hidden username so password managers (Bitwarden, Chrome…) save the
       // generated passphrase as a complete credential for this origin.
       html += '<input type="hidden" name="username" value="makeGTD" autocomplete="username" />';
-      html +=
-        '<label class="block">' +
-        '<span class="block">Frase de cifrado</span>' +
-        '<span class="block text-xs text-stone-400 dark:text-stone-500 mt-0.5 mb-1">' +
-        'Una contraseña que inventas tú: con ella se cifran tus datos en este dispositivo ' +
-        'antes de subirse. Elige una larga —varias palabras que recuerdes— o genera una segura con el ' +
-        'botón y guárdala en tu gestor de contraseñas. Tendrás que escribir la misma en cada dispositivo que ' +
-        'conectes. No se puede recuperar: si la olvidas, la copia remota será ilegible (tus dispositivos ' +
-        'conservan sus datos).' +
-        '</span>' +
-        '<span class="flex gap-2">' +
-        '<input type="password" id="sync-passphrase" name="passphrase" class="field flex-1" autocomplete="new-password" />' +
-        '<button type="button" class="btn-secondary shrink-0" data-action="sync-generate-passphrase">Generar</button>' +
-        '<button type="button" class="btn-ghost shrink-0" data-action="toggle-passphrase" aria-pressed="false">Mostrar</button>' +
-        '</span>' +
-        '</label>';
+      if (!syncStatus.configured) {
+        html +=
+          '<label class="block">' +
+          '<span class="block">Frase de cifrado</span>' +
+          '<span class="block text-xs text-stone-400 dark:text-stone-500 mt-0.5 mb-1">' +
+          'Una contraseña que inventas tú: con ella se cifran tus datos en este dispositivo ' +
+          'antes de subirse. Elige una larga —varias palabras que recuerdes— o genera una segura con el ' +
+          'botón y guárdala en tu gestor de contraseñas. Tendrás que escribir la misma en cada dispositivo que ' +
+          'conectes. No se puede recuperar: si la olvidas, la copia remota será ilegible (tus dispositivos ' +
+          'conservan sus datos).' +
+          '</span>' +
+          '<span class="flex gap-2">' +
+          '<input type="password" id="sync-passphrase" name="passphrase" class="field flex-1" autocomplete="new-password" />' +
+          '<button type="button" class="btn-secondary shrink-0" data-action="sync-generate-passphrase">Generar</button>' +
+          '<button type="button" class="btn-ghost shrink-0" data-action="toggle-passphrase" aria-pressed="false">Mostrar</button>' +
+          '</span>' +
+          '</label>';
+      }
+      // Adding a second destination reuses the stored passphrase: the
+      // encrypted files must be identical on every backend.
+      html += '<div class="flex flex-wrap gap-2">';
       html +=
         '<button type="submit" class="btn-primary">' +
-        (syncProvider === 'gdrive' ? 'Guardar y conectar con Google' : 'Guardar y sincronizar') +
+        (formProvider === 'gdrive' ? 'Guardar y conectar con Google' : 'Guardar y sincronizar') +
         '</button>';
-      html += '</form>';
-    } else {
-      var providerLabel =
-        syncStatus.provider === 'gdrive'
-          ? 'tu Google Drive'
-          : 'tu servidor (<code class="break-all">' + esc(syncStatus.serverUrl || '') + '</code>)';
-      html +=
-        '<p class="text-sm text-stone-500 dark:text-stone-400">Conectado a ' + providerLabel + '. ' +
-        (syncStatus.lastSyncAt
-          ? 'Última sincronización: ' + model.formatDate(syncStatus.lastSyncAt) + '.'
-          : 'Aún sin sincronizar.') +
-        '</p>';
-      html += '<div class="flex flex-wrap gap-2">';
-      html += '<button type="button" class="btn-secondary" data-action="sync-now">Sincronizar ahora</button>';
-      if (syncStatus.provider === 'server') {
-        html += '<button type="button" class="btn-secondary" data-action="sync-export-key">Descargar archivo de llave…</button>';
+      if (syncStatus.configured) {
+        html += '<button type="button" class="btn-ghost" data-action="sync-add-cancel">Cancelar</button>';
       }
-      html += '<button type="button" class="btn-ghost text-red-500 dark:text-red-400" data-action="sync-disconnect">Desconectar…</button>';
       html += '</div>';
-      if (syncStatus.provider === 'gdrive') {
-        html +=
-          '<p class="text-xs text-stone-400 dark:text-stone-500">' +
-          'Tus datos se suben cifrados a la carpeta de datos de aplicaciones de tu Google Drive ' +
-          '(<code>appDataFolder</code>), que no aparece entre tus archivos. Cada dispositivo guarda ' +
-          'ahí su propio archivo; el de este es <code class="break-all">' + esc(syncStatus.fileName) + '</code>. ' +
-          'Puedes ver el espacio que ocupa o borrarla en «Gestionar aplicaciones», dentro de ' +
-          '<a href="https://drive.google.com/drive/settings" target="_blank" rel="noopener" class="text-accent underline">los ajustes de Google Drive en la web</a>. ' +
-          'La app móvil de Drive no tiene esa opción: abre el enlace en un navegador (si no aparece, ' +
-          'activa «Versión para ordenador»).' +
-          '</p>';
-        html +=
-          '<p class="text-xs text-stone-400 dark:text-stone-500">' +
-          'Si tu proyecto de Google sigue en modo «Testing», te pedirá autorizar de nuevo cada 7 días; ' +
-          'publícalo en producción para evitarlo.' +
-          '</p>';
-      } else {
-        html +=
-          '<p class="text-xs text-stone-400 dark:text-stone-500">' +
-          'Cada dispositivo guarda su propio archivo cifrado en el servidor; el de este es ' +
-          '<code class="break-all">' + esc(syncStatus.fileName) + '</code>. ' +
-          'El archivo de llave (protegido con contraseña) configura tus otros dispositivos sin teclear nada.' +
-          '</p>';
-      }
+      html += '</form>';
     }
     html += '</div>';
 
@@ -943,6 +982,10 @@
 
   // Provider selected in the sync setup form (before it is configured).
   var syncProvider = 'gdrive';
+
+  // Backend being added from an already-configured device ('gdrive',
+  // 'server' or null when no add-form is open).
+  var syncAddProvider = null;
 
   function bind() {
     var $view = $('#view');
@@ -1332,10 +1375,16 @@
         .then(function (result) {
           // {redirecting: true} means the page is leaving for Google's
           // consent screen; the flow resumes at boot after the redirect.
-          if (result && result.ok) {
+          if (!result || result.redirecting) return;
+          if (result.ok) {
             toast('Sincronizado ✅');
-            refresh();
+          } else {
+            var failed = result.results.filter(function (r) {
+              return !r.ok;
+            })[0];
+            toast(syncBackendLabel(failed.provider) + ': ' + syncErrorMessage(failed.error));
           }
+          refresh();
         })
         .catch(function (err) {
           toast(syncErrorMessage(err));
@@ -1349,22 +1398,43 @@
 
     $view.on('submit', '#sync-config-form', function (e) {
       e.preventDefault();
+      // The passphrase field only exists on a fresh setup; when adding a
+      // second backend the stored passphrase is reused (empty value).
+      var passphrase = $('#sync-passphrase').val() || '';
       if ($('#sync-client-id').length) {
-        if (!global.GTD.syncer.setGdriveConfig($('#sync-client-id').val(), $('#sync-passphrase').val())) {
+        if (!global.GTD.syncer.setGdriveConfig($('#sync-client-id').val(), passphrase)) {
           toast('Faltan el ID de cliente o la frase de cifrado');
           return;
         }
       } else if (
-        !global.GTD.syncer.setServerConfig(
-          $('#sync-server-url').val(),
-          $('#sync-server-key').val(),
-          $('#sync-passphrase').val()
-        )
+        !global.GTD.syncer.setServerConfig($('#sync-server-url').val(), $('#sync-server-key').val(), passphrase)
       ) {
         toast('Revisa la dirección del servidor, la clave y la frase de cifrado');
         return;
       }
+      syncAddProvider = null;
       syncNow(); // On Google Drive, the first sync triggers the consent redirect.
+    });
+
+    $view.on('click', '[data-action="sync-add-backend"]', function () {
+      syncAddProvider = $(this).data('provider');
+      refresh();
+    });
+
+    $view.on('click', '[data-action="sync-add-cancel"]', function () {
+      syncAddProvider = null;
+      refresh();
+    });
+
+    $view.on('click', '[data-action="sync-remove-backend"]', function () {
+      var provider = $(this).data('provider');
+      var message =
+        '¿Quitar ' + syncBackendLabel(provider) + ' de este dispositivo? ' +
+        'Tus datos locales se conservan; la copia remota no se borra.';
+      if (!global.confirm(message)) return;
+      global.GTD.syncer.removeBackend(provider);
+      toast('Destino quitado');
+      refresh();
     });
 
     $view.on('click', '[data-action="toggle-passphrase"]', function () {
@@ -1395,7 +1465,9 @@
           .then(function (data) {
             $('#sync-server-url').val(data.url);
             $('#sync-server-key').val(data.key);
-            if (data.passphrase) $('#sync-passphrase').val(data.passphrase);
+            // The passphrase field only exists on a fresh setup; when adding
+            // a backend the stored passphrase is reused instead.
+            if (data.passphrase && $('#sync-passphrase').length) $('#sync-passphrase').val(data.passphrase);
             input.value = '';
             toast('Archivo de llave importado: revisa y pulsa guardar');
           })
@@ -1443,13 +1515,6 @@
       toast('Frase generada: guárdala antes de continuar');
     });
 
-    $view.on('click', '[data-action="sync-disconnect"]', function () {
-      if (!global.confirm('¿Desconectar la sincronización en este dispositivo? Tus datos locales se conservan; la copia remota no se borra.')) return;
-      global.GTD.syncer.disconnect();
-      toast('Sincronización desconectada');
-      refresh();
-    });
-
     $view.on('click', '[data-action="copy-value"]', function () {
       var value = String($(this).data('value'));
       if (global.navigator.clipboard && global.navigator.clipboard.writeText) {
@@ -1465,6 +1530,11 @@
         global.prompt('Copia este valor:', value);
       }
     });
+  }
+
+  // Backend name as shown in toasts and confirmations.
+  function syncBackendLabel(provider) {
+    return provider === 'gdrive' ? 'Google Drive' : 'Servidor propio';
   }
 
   // Spanish UI message for a sync failure (error codes come from js/syncer.js
@@ -1502,6 +1572,7 @@
     renderTrash: renderTrash,
     renderSettings: renderSettings,
     syncErrorMessage: syncErrorMessage,
+    syncBackendLabel: syncBackendLabel,
     collapseEditor: function () {
       expandedItemId = null;
       expandedHorizonId = null;
