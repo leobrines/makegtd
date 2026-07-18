@@ -34,35 +34,52 @@ test('normalizeServerUrl canonicalizes what users type', function () {
   assert.strictEqual(pure.normalizeServerUrl('   '), null);
 });
 
-test('normalizeConfig accepts current gdrive and server shapes', function () {
-  var gdrive = pure.normalizeConfig({ provider: 'gdrive', passphrase: 'p', gdrive: { clientId: ' abc.apps ' } });
-  assert.deepStrictEqual(gdrive, { provider: 'gdrive', passphrase: 'p', gdrive: { clientId: 'abc.apps' } });
-  var server = pure.normalizeConfig({ provider: 'server', passphrase: 'p', server: { url: 'sync.example.com/', key: ' k1 ' } });
-  assert.deepStrictEqual(server, { provider: 'server', passphrase: 'p', server: { url: 'https://sync.example.com', key: 'k1' } });
+test('normalizeConfig accepts single-backend shapes', function () {
+  var gdrive = pure.normalizeConfig({ passphrase: 'p', gdrive: { clientId: ' abc.apps ' } });
+  assert.deepStrictEqual(gdrive, { passphrase: 'p', gdrive: { clientId: 'abc.apps' }, server: null });
+  var server = pure.normalizeConfig({ passphrase: 'p', server: { url: 'sync.example.com/', key: ' k1 ' } });
+  assert.deepStrictEqual(server, { passphrase: 'p', gdrive: null, server: { url: 'https://sync.example.com', key: 'k1' } });
 });
 
-test('normalizeConfig migrates the legacy gdrive-only shape', function () {
-  var migrated = pure.normalizeConfig({ clientId: 'abc.apps', passphrase: 'p' });
-  assert.deepStrictEqual(migrated, { provider: 'gdrive', passphrase: 'p', gdrive: { clientId: 'abc.apps' } });
+test('normalizeConfig accepts both backends at once', function () {
+  var both = pure.normalizeConfig({
+    passphrase: 'p',
+    gdrive: { clientId: 'abc.apps' },
+    server: { url: 'https://s.tld', key: 'k1' },
+  });
+  assert.deepStrictEqual(both, {
+    passphrase: 'p',
+    gdrive: { clientId: 'abc.apps' },
+    server: { url: 'https://s.tld', key: 'k1' },
+  });
+});
+
+test('normalizeConfig migrates the earlier single-provider shapes', function () {
+  var fromProvider = pure.normalizeConfig({ provider: 'gdrive', passphrase: 'p', gdrive: { clientId: 'abc.apps' } });
+  assert.deepStrictEqual(fromProvider, { passphrase: 'p', gdrive: { clientId: 'abc.apps' }, server: null });
+  var fromLegacy = pure.normalizeConfig({ clientId: 'abc.apps', passphrase: 'p' });
+  assert.deepStrictEqual(fromLegacy, { passphrase: 'p', gdrive: { clientId: 'abc.apps' }, server: null });
 });
 
 test('normalizeConfig rejects incomplete configs', function () {
   assert.strictEqual(pure.normalizeConfig(null), null);
   assert.strictEqual(pure.normalizeConfig({}), null);
-  assert.strictEqual(pure.normalizeConfig({ provider: 'gdrive', passphrase: '', gdrive: { clientId: 'x' } }), null);
-  assert.strictEqual(pure.normalizeConfig({ provider: 'gdrive', passphrase: 'p', gdrive: { clientId: '  ' } }), null);
-  assert.strictEqual(pure.normalizeConfig({ provider: 'server', passphrase: 'p', server: { url: 'bad url', key: 'k' } }), null);
-  assert.strictEqual(pure.normalizeConfig({ provider: 'server', passphrase: 'p', server: { url: 'https://h.tld', key: '' } }), null);
-  assert.strictEqual(pure.normalizeConfig({ provider: 'otro', passphrase: 'p' }), null);
+  assert.strictEqual(pure.normalizeConfig({ passphrase: '', gdrive: { clientId: 'x' } }), null);
+  assert.strictEqual(pure.normalizeConfig({ passphrase: 'p', gdrive: { clientId: '  ' } }), null);
+  assert.strictEqual(pure.normalizeConfig({ passphrase: 'p', server: { url: 'bad url', key: 'k' } }), null);
+  assert.strictEqual(pure.normalizeConfig({ passphrase: 'p', server: { url: 'https://h.tld', key: '' } }), null);
+  // An invalid backend does not sink the config while a valid one remains.
+  var partial = pure.normalizeConfig({ passphrase: 'p', gdrive: { clientId: 'x' }, server: { url: 'bad url', key: 'k' } });
+  assert.deepStrictEqual(partial, { passphrase: 'p', gdrive: { clientId: 'x' }, server: null });
 });
 
 test('key file round-trips through build + parse', function () {
-  var config = pure.normalizeConfig({ provider: 'server', passphrase: 'frase', server: { url: 'https://s.tld', key: 'k1' } });
+  var config = pure.normalizeConfig({ passphrase: 'frase', server: { url: 'https://s.tld', key: 'k1' } });
   var parsed = pure.parseKeyFile(pure.buildKeyFile(config));
   assert.deepStrictEqual(parsed, { url: 'https://s.tld', key: 'k1', passphrase: 'frase' });
 });
 
-test('buildKeyFile only applies to the server provider', function () {
+test('buildKeyFile requires the server backend', function () {
   assert.strictEqual(pure.buildKeyFile(pure.normalizeConfig({ clientId: 'x', passphrase: 'p' })), null);
   assert.strictEqual(pure.buildKeyFile(null), null);
 });

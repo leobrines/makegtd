@@ -1,7 +1,11 @@
 /* Provider-agnostic sync core (local-first phase 3).
  *
- * The app supports multiple sync backends behind one transport interface;
- * exactly one is active at a time. A transport implements:
+ * The app syncs against multiple backends behind one transport interface;
+ * any subset (Google Drive, self-hosted server, or both) can be active at
+ * once — redundant cloud peers, in local-first terms: every backend holds
+ * the same encrypted per-device files and none is authoritative, so the
+ * deterministic merge (js/sync.js) converges no matter how many take part.
+ * A transport implements:
  *   ensureAuth(config) -> {ctx} when ready, or {redirecting: true} when an
  *                         auth round-trip (e.g. OAuth redirect) is underway
  *   list(config, ctx)              -> Promise<[{id, name}]>
@@ -9,24 +13,31 @@
  *   upload(config, ctx, name, content, existingId) -> Promise
  * Registered transports: 'gdrive' (js/drive.js) and 'server' (js/server.js).
  *
- * The orchestration here is transport-independent: one encrypted file per
- * device (gtd-device-<id>.json) so writes never conflict; every sync
- * downloads the other devices' files, decrypts (js/crypto.js), merges with
- * the local state (js/sync.js), replaces it and re-uploads this device's
- * file.
+ * sync() runs the backends sequentially — server first, then Google Drive,
+ * because Drive may leave the page for an OAuth redirect and everything
+ * before it must have finished. The local state is re-merged after each
+ * backend, so a device connected to both acts as a bridge between devices
+ * that only use one of them. Per-backend failures do not stop the others;
+ * the result carries one entry per backend.
  *
- * Key file: for the self-hosted server provider, the whole device setup
+ * One encrypted file per device (gtd-device-<id>.json) so writes never
+ * conflict; every pass downloads the other devices' files, decrypts
+ * (js/crypto.js), merges with the local state, replaces it and re-uploads
+ * this device's file. The encryption passphrase is shared by all backends
+ * (same files everywhere).
+ *
+ * Key file: for the self-hosted server backend, the whole device setup
  * (url, access key, passphrase) can be exported as a password-encrypted
  * file (a js/crypto.js envelope) and imported on another device, so only
  * the first device is configured by hand.
  *
  * Device-local storage (never part of the synced document):
- * - localStorage 'gtd:sync:config' — {provider, passphrase, gdrive|server}.
+ * - localStorage 'gtd:sync:config' — {passphrase, gdrive|null, server|null}.
  *   The passphrase is deliberately device-local: the device already holds
  *   the plaintext state, so storing it here does not weaken E2E against a
- *   compromised backend. (Replaces the legacy 'gtd:sync:gdrive' key, which
- *   is migrated on first read.)
- * - localStorage 'gtd:device-id', 'gtd:sync:last'.
+ *   compromised backend. (Earlier single-backend shapes — {provider, …} and
+ *   the gdrive-only 'gtd:sync:gdrive' key — are migrated on first read.)
+ * - localStorage 'gtd:device-id', 'gtd:sync:last' (per-backend timestamps).
  */
 (function (global) {
   'use strict';
@@ -70,31 +81,31 @@
     return (url.origin + url.pathname).replace(/\/+$/, '');
   }
 
-  // Normalizes any stored shape (current or legacy) to a valid config, or
-  // null. Legacy shape: {clientId, passphrase} from the gdrive-only era.
+  // Normalizes any stored shape to a valid config ({passphrase, gdrive|null,
+  // server|null}, at least one backend), or null. Also accepts the earlier
+  // single-backend shape ({provider, passphrase, gdrive|server}) and the
+  // original gdrive-only shape ({clientId, passphrase}).
   function normalizeConfig(raw) {
     if (!raw || typeof raw !== 'object') return null;
     if (typeof raw.passphrase !== 'string' || !raw.passphrase) return null;
-    var provider = raw.provider || (raw.clientId ? 'gdrive' : null);
-    if (provider === 'gdrive') {
-      var clientId = String((raw.gdrive && raw.gdrive.clientId) || raw.clientId || '').trim();
-      if (!clientId) return null;
-      return { provider: 'gdrive', passphrase: raw.passphrase, gdrive: { clientId: clientId } };
+    var gdrive = null;
+    var clientId = String((raw.gdrive && raw.gdrive.clientId) || raw.clientId || '').trim();
+    if (clientId) gdrive = { clientId: clientId };
+    var server = null;
+    if (raw.server) {
+      var url = normalizeServerUrl(raw.server.url);
+      var key = String(raw.server.key || '').trim();
+      if (url && key) server = { url: url, key: key };
     }
-    if (provider === 'server') {
-      var url = normalizeServerUrl(raw.server && raw.server.url);
-      var key = String((raw.server && raw.server.key) || '').trim();
-      if (!url || !key) return null;
-      return { provider: 'server', passphrase: raw.passphrase, server: { url: url, key: key } };
-    }
-    return null;
+    if (!gdrive && !server) return null;
+    return { passphrase: raw.passphrase, gdrive: gdrive, server: server };
   }
 
-  // Key file payload for the self-hosted server provider. Always shipped
+  // Key file payload for the self-hosted server backend. Always shipped
   // inside a password-encrypted envelope by exportKeyFile(); parse accepts
   // the decrypted (or a hand-written plain) JSON.
   function buildKeyFile(config) {
-    if (!config || config.provider !== 'server') return null;
+    if (!config || !config.server) return null;
     return JSON.stringify({
       makegtd: 1,
       type: 'sync-server',
@@ -146,26 +157,50 @@
     return legacy;
   }
 
+  // Adding a backend keeps the other one; an empty passphrase reuses the
+  // stored one (adding a second backend never asks for it again — the
+  // encrypted files must be identical on every backend).
   function setGdriveConfig(clientId, passphrase) {
+    var existing = getConfig();
     var config = normalizeConfig({
-      provider: 'gdrive',
-      passphrase: String(passphrase || ''),
+      passphrase: String(passphrase || '') || (existing ? existing.passphrase : ''),
       gdrive: { clientId: clientId },
+      server: existing ? existing.server : null,
     });
-    if (!config) return false;
+    if (!config || !config.gdrive) return false;
     writeJSON(CONFIG_KEY, config);
     return true;
   }
 
   function setServerConfig(url, key, passphrase) {
+    var existing = getConfig();
     var config = normalizeConfig({
-      provider: 'server',
-      passphrase: String(passphrase || ''),
+      passphrase: String(passphrase || '') || (existing ? existing.passphrase : ''),
+      clientId: existing && existing.gdrive ? existing.gdrive.clientId : '',
       server: { url: url, key: key },
     });
-    if (!config) return false;
+    if (!config || !config.server) return false;
     writeJSON(CONFIG_KEY, config);
     return true;
+  }
+
+  // Removes one backend; removing the last one clears the whole sync setup.
+  function removeBackend(provider) {
+    var config = getConfig();
+    if (!config) return;
+    if (provider === 'gdrive') {
+      config.gdrive = null;
+      if (global.GTD.drive && global.GTD.drive.clearSession) global.GTD.drive.clearSession();
+    }
+    if (provider === 'server') config.server = null;
+    if (!config.gdrive && !config.server) {
+      disconnect();
+      return;
+    }
+    writeJSON(CONFIG_KEY, config);
+    var last = readLastSyncMap();
+    delete last[provider];
+    writeJSON(LAST_SYNC_KEY, last);
   }
 
   function disconnect() {
@@ -173,6 +208,13 @@
     writeJSON(LEGACY_GDRIVE_KEY, null);
     writeJSON(LAST_SYNC_KEY, null);
     if (global.GTD.drive && global.GTD.drive.clearSession) global.GTD.drive.clearSession();
+  }
+
+  // Per-backend timestamps; the pre-multi-backend value was a plain string
+  // (unknown backend), which is simply discarded.
+  function readLastSyncMap() {
+    var value = readJSON(LAST_SYNC_KEY);
+    return value && typeof value === 'object' ? value : {};
   }
 
   function deviceId() {
@@ -197,11 +239,15 @@
   function status() {
     var config = getConfig();
     var id = deviceId();
+    var last = readLastSyncMap();
+    var backends = [];
+    if (config && config.server) backends.push({ provider: 'server', serverUrl: config.server.url, lastSyncAt: last.server || null });
+    if (config && config.gdrive) backends.push({ provider: 'gdrive', serverUrl: null, lastSyncAt: last.gdrive || null });
     return {
       configured: !!config,
-      provider: config ? config.provider : null,
-      serverUrl: config && config.provider === 'server' ? config.server.url : null,
-      lastSyncAt: readJSON(LAST_SYNC_KEY),
+      backends: backends,
+      hasGdrive: !!(config && config.gdrive),
+      hasServer: !!(config && config.server),
       deviceId: id,
       fileName: deviceFileName(id),
       origin: global.location.origin,
@@ -211,20 +257,22 @@
 
   // ---- Orchestration ----
 
-  function transportFor(config) {
-    if (config.provider === 'gdrive') return global.GTD.drive.transport;
-    if (config.provider === 'server') return global.GTD.server.transport;
-    return null;
-  }
+  var TRANSPORTS = {
+    gdrive: function () {
+      return global.GTD.drive.transport;
+    },
+    server: function () {
+      return global.GTD.server.transport;
+    },
+  };
 
-  // Resolves {ok: true, devices: n} on success or {redirecting: true} when
-  // an auth round-trip is needed first; rejects with a coded Error
-  // ('not-configured', 'auth-expired', 'auth-invalid', 'decrypt-failed',
-  // '*-http-*', network failures…).
-  function sync() {
-    var config = getConfig();
-    if (!config) return Promise.reject(new Error('not-configured'));
-    var transport = transportFor(config);
+  // One full pass against one backend: list, download+decrypt the other
+  // devices' files, merge into the local state, re-upload this device's
+  // file. Resolves {devices: n} or {redirecting: true}; rejects with a coded
+  // Error ('auth-expired', 'auth-invalid', 'decrypt-failed', '*-http-*',
+  // network failures…).
+  function syncBackend(config, provider) {
+    var transport = TRANSPORTS[provider]();
     var auth = transport.ensureAuth(config);
     if (auth.redirecting) return Promise.resolve({ redirecting: true });
     var ctx = auth.ctx;
@@ -268,9 +316,53 @@
             return transport.upload(config, ctx, ownName, envelope, ownFileId);
           })
           .then(function () {
-            writeJSON(LAST_SYNC_KEY, new Date().toISOString());
-            return { ok: true, devices: remoteDocs.length + 1 };
+            var last = readLastSyncMap();
+            last[provider] = new Date().toISOString();
+            writeJSON(LAST_SYNC_KEY, last);
+            return { devices: remoteDocs.length + 1 };
           });
+      });
+  }
+
+  // Syncs every active backend sequentially — server first, Google Drive
+  // last (it may leave the page for an OAuth redirect). A failing backend
+  // does not stop the others. Resolves {redirecting: true} or
+  // {ok: <all succeeded>, results: [{provider, ok, devices|error}]};
+  // rejects only when sync is not configured at all.
+  function sync() {
+    var config = getConfig();
+    if (!config) return Promise.reject(new Error('not-configured'));
+    var providers = [];
+    if (config.server) providers.push('server');
+    if (config.gdrive) providers.push('gdrive');
+    var results = [];
+    var redirecting = false;
+    return providers
+      .reduce(function (chain, provider) {
+        return chain.then(function () {
+          if (redirecting) return;
+          return syncBackend(config, provider).then(
+            function (result) {
+              if (result.redirecting) {
+                redirecting = true;
+                return;
+              }
+              results.push({ provider: provider, ok: true, devices: result.devices });
+            },
+            function (err) {
+              results.push({ provider: provider, ok: false, error: err });
+            }
+          );
+        });
+      }, Promise.resolve())
+      .then(function () {
+        if (redirecting) return { redirecting: true, results: results };
+        return {
+          ok: results.every(function (r) {
+            return r.ok;
+          }),
+          results: results,
+        };
       });
   }
 
@@ -302,6 +394,7 @@
     getConfig: getConfig,
     setGdriveConfig: setGdriveConfig,
     setServerConfig: setServerConfig,
+    removeBackend: removeBackend,
     disconnect: disconnect,
     sync: sync,
     exportKeyFile: exportKeyFile,
