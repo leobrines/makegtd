@@ -37,11 +37,15 @@ Useful handles (mobile-ish viewport 420x820 renders everything):
 
 ## Gotchas
 
-- All app state lives in `localStorage` key `gtd:data:v1` AND in memory.
-  `localStorage.clear()` alone is not enough: changing `location.hash` in the
-  same evaluate triggers a render that can re-save in-memory state. To reset,
-  clear storage and `page.reload()` with no other interaction in between, or
-  just use a fresh browser context.
+- All app state lives in IndexedDB (database `gtd`, store `state`, key
+  `gtd:data`) AND in memory; the legacy `localStorage` key `gtd:data:v1` is a
+  migration source/fallback. Clearing storage alone is not enough: changing
+  `location.hash` in the same evaluate triggers a render that can re-save
+  in-memory state. To reset, clear both storages (`indexedDB.deleteDatabase('gtd')`
+  + `localStorage.clear()`) and `page.reload()` with no other interaction in
+  between, or just use a fresh browser context.
+- Boot is async (`GTD.store.init()`): after `page.goto` wait for `#view` to
+  have content before evaluating anything against `GTD.*`.
 - The Clarify wizard keeps module-level state (`step`, `itemId`) across hash
   navigation within a page session; it only resets per item or on page load.
 - Bump `CACHE_VERSION` in `sw.js` for any precached asset change (all js/css/html).
