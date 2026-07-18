@@ -1,21 +1,29 @@
 # makegtd sync server
 
-A zero-dependency, single-file reference server for makegtd's self-hosted
-sync provider ("Servidor propio" in Ajustes → Sincronización). It stores the
-app's per-device files as opaque blobs: payloads are end-to-end encrypted on
-the device before upload, so the server can never read GTD data — it only
-needs to be reachable and to keep the files safe.
+A zero-dependency (stdlib-only) Go reference server for makegtd's
+self-hosted sync provider ("Servidor propio" in Ajustes → Sincronización).
+It stores the app's per-device files as opaque blobs: payloads are
+end-to-end encrypted on the device before upload, so the server can never
+read GTD data — it only needs to be reachable and to keep the files safe.
 
 ## Run
 
 ```bash
 # Generate an access key (any long random string works):
-node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"
+openssl rand -base64 24
 
 ACCESS_KEY=<the key> \
 DATA_DIR=/var/lib/makegtd-sync \
 ALLOWED_ORIGIN=https://your-makegtd-host \
-node server/sync-server.js
+go run ./server
+```
+
+Or build a small static binary once and deploy it anywhere (no runtime
+needed on the host):
+
+```bash
+go build -o makegtd-sync ./server          # current platform
+GOOS=linux GOARCH=arm64 go build -o makegtd-sync ./server   # e.g. a Raspberry Pi
 ```
 
 Environment variables:

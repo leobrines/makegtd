@@ -16,20 +16,33 @@
  * - Items pointing at a tombstone-killed project lose the link, mirroring
  *   what emptyTrash() does locally. Merge never stamps updatedAt: results
  *   must be identical on every device, and re-stamping would ping-pong.
- * - Contexts are plain strings (no timestamps): merged as a union. Known
- *   limitation: a context removed on one device can come back from another.
+ * - Contexts are entities whose id IS the name (no rename exists), so they
+ *   merge by the same rules and deletions propagate via tombstones. Legacy
+ *   v2 documents carry them as plain strings: those are normalized here to
+ *   epoch-stamped entities deterministically, so any real edit or tombstone
+ *   beats them.
  * - settings has no per-key timestamps: the whole object is taken from the
  *   most recently saved document (savedAt).
  */
 (function (global) {
   'use strict';
 
-  // Entity kinds: state list, trash list and the tombstone type tag.
+  // Entity kinds: state list, tombstone type tag, and whether the kind has a
+  // trash list (contexts are deleted outright, never trashed).
   var KINDS = [
-    { list: 'items', type: 'item' },
-    { list: 'projects', type: 'project' },
-    { list: 'horizons', type: 'horizon' },
+    { list: 'items', type: 'item', trash: true },
+    { list: 'projects', type: 'project', trash: true },
+    { list: 'horizons', type: 'horizon', trash: true },
+    { list: 'contexts', type: 'context', trash: false },
   ];
+
+  // Deterministic normalization of a legacy (v2) plain-string context. The
+  // epoch stamp means any tombstone or real edit wins over the legacy copy.
+  var CONTEXT_EPOCH = '1970-01-01T00:00:00.000Z';
+
+  function legacyContext(name) {
+    return { id: name, name: name, createdAt: CONTEXT_EPOCH, updatedAt: CONTEXT_EPOCH };
+  }
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
@@ -63,8 +76,7 @@
     });
 
     var result = {
-      version: 2,
-      contexts: [],
+      version: 3,
       trash: { items: [], projects: [], horizons: [] },
       tombstones: [],
       settings: null,
@@ -75,8 +87,9 @@
       var order = []; // First-seen order, local document first: stable lists.
       docs.forEach(function (doc) {
         var active = Array.isArray(doc[kind.list]) ? doc[kind.list] : [];
-        var trashed = doc.trash && Array.isArray(doc.trash[kind.list]) ? doc.trash[kind.list] : [];
+        var trashed = kind.trash && doc.trash && Array.isArray(doc.trash[kind.list]) ? doc.trash[kind.list] : [];
         active.concat(trashed).forEach(function (entity) {
+          if (kind.type === 'context' && typeof entity === 'string') entity = legacyContext(entity);
           if (!entity || !entity.id) return;
           if (!winners[entity.id]) {
             winners[entity.id] = entity;
@@ -99,23 +112,18 @@
             return; // Purged for good; only the tombstone remains.
           }
         }
-        (winner.deletedAt ? result.trash[kind.list] : result[kind.list]).push(clone(winner));
+        (kind.trash && winner.deletedAt ? result.trash[kind.list] : result[kind.list]).push(clone(winner));
       });
     });
 
-    // Mirror emptyTrash(): cut links to projects that are gone for good. Any
-    // project tombstone still standing means the project is dead everywhere,
-    // whether or not a copy of it appeared in the merged documents.
+    // Mirror the local deletions' side effects on items: emptyTrash() cuts
+    // links to purged projects and removeContext() clears the tag. Any
+    // standing tombstone means the entity is dead everywhere, whether or not
+    // a copy of it appeared in the merged documents.
     [result.items, result.trash.items].forEach(function (list) {
       list.forEach(function (item) {
         if (item.projectId && tombstones['project:' + item.projectId]) item.projectId = null;
-      });
-    });
-
-    // Contexts: union, local order first.
-    docs.forEach(function (doc) {
-      (Array.isArray(doc.contexts) ? doc.contexts : []).forEach(function (name) {
-        if (result.contexts.indexOf(name) === -1) result.contexts.push(name);
+        if (item.context && tombstones['context:' + item.context]) item.context = null;
       });
     });
 
