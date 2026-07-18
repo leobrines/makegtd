@@ -1,5 +1,5 @@
 /* Service worker: precache everything, serve cache-first. Bump CACHE_VERSION on any asset change. */
-var CACHE_VERSION = 'makegtd-v27';
+var CACHE_VERSION = 'makegtd-v28';
 
 var PRECACHE = [
   './',
@@ -10,7 +10,9 @@ var PRECACHE = [
   'js/store.js',
   'js/sync.js',
   'js/crypto.js',
+  'js/syncer.js',
   'js/drive.js',
+  'js/server.js',
   'js/model.js',
   'js/views.js',
   'js/process.js',

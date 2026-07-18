@@ -165,10 +165,71 @@ test('projects and horizons merge by the same rules', function () {
   assert.strictEqual(merged.horizons.length, 2);
 });
 
+function contextNames(state) {
+  return state.contexts.map(function (c) {
+    return c.name;
+  });
+}
+
+function ctx(name, updatedAt) {
+  return { id: name, name: name, createdAt: updatedAt, updatedAt: updatedAt };
+}
+
 test('contexts merge as a union, local order first', function () {
   var local = doc({ contexts: ['@casa', '@trabajo'] });
   var remote = doc({ contexts: ['@recados', '@casa'] });
-  assert.deepStrictEqual(merge([local, remote]).contexts, ['@casa', '@trabajo', '@recados']);
+  assert.deepStrictEqual(contextNames(merge([local, remote])), ['@casa', '@trabajo', '@recados']);
+});
+
+test('legacy string contexts normalize to epoch-stamped entities', function () {
+  var merged = merge([doc({ contexts: ['@casa'] })]);
+  assert.deepStrictEqual(merged.contexts, [
+    { id: '@casa', name: '@casa', createdAt: '1970-01-01T00:00:00.000Z', updatedAt: '1970-01-01T00:00:00.000Z' },
+  ]);
+});
+
+test('an entity context beats its legacy string copy', function () {
+  var local = doc({ contexts: ['@casa'] });
+  var remote = doc({ contexts: [ctx('@casa', '2026-01-01T10:00:00.000Z')] });
+  var merged = merge([local, remote]);
+  assert.strictEqual(merged.contexts.length, 1);
+  assert.strictEqual(merged.contexts[0].updatedAt, '2026-01-01T10:00:00.000Z');
+});
+
+test('context deletion propagates via tombstone (beats legacy and older copies)', function () {
+  var local = doc({ contexts: ['@casa', ctx('@recados', '2026-01-01T10:00:00.000Z')] });
+  var remote = doc({
+    contexts: [],
+    tombstones: [
+      { id: '@casa', type: 'context', deletedAt: '2026-01-02T10:00:00.000Z' },
+      { id: '@recados', type: 'context', deletedAt: '2026-01-02T10:00:00.000Z' },
+    ],
+  });
+  var merged = merge([local, remote]);
+  assert.deepStrictEqual(contextNames(merged), []);
+  assert.strictEqual(merged.tombstones.length, 2);
+});
+
+test('items lose the tag of a tombstone-killed context', function () {
+  var local = doc({ items: [item('a', '2026-01-01T10:00:00.000Z', { context: '@gimnasio' })] });
+  var remote = doc({ tombstones: [{ id: '@gimnasio', type: 'context', deletedAt: '2026-01-02T10:00:00.000Z' }] });
+  assert.strictEqual(merge([local, remote]).items[0].context, null);
+});
+
+test('re-adding a deleted context survives and drops the tombstone', function () {
+  var local = doc({ contexts: [ctx('@casa', '2026-01-03T10:00:00.000Z')] });
+  var remote = doc({ contexts: [], tombstones: [{ id: '@casa', type: 'context', deletedAt: '2026-01-02T10:00:00.000Z' }] });
+  var merged = merge([local, remote]);
+  assert.deepStrictEqual(contextNames(merged), ['@casa']);
+  assert.strictEqual(merged.tombstones.length, 0);
+});
+
+test('the same context added on two devices converges to one entity', function () {
+  var a = doc({ contexts: [ctx('@casa', '2026-01-01T10:00:00.000Z')] });
+  var b = doc({ contexts: [ctx('@casa', '2026-01-02T10:00:00.000Z')] });
+  var merged = merge([a, b]);
+  assert.strictEqual(merged.contexts.length, 1);
+  assert.strictEqual(merged.contexts[0].updatedAt, '2026-01-02T10:00:00.000Z');
 });
 
 test('settings come whole from the most recently saved document', function () {
@@ -223,7 +284,7 @@ test('a single document passes through unchanged in content', function () {
   var local = doc({ items: [item('a', '2026-01-01T10:00:00.000Z')] });
   var merged = merge([local]);
   assert.deepStrictEqual(entityMap(merged), entityMap(local));
-  assert.deepStrictEqual(merged.contexts, local.contexts);
+  assert.deepStrictEqual(contextNames(merged), local.contexts);
 });
 
 test('malformed documents and entities are skipped', function () {

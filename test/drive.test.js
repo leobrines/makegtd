@@ -49,16 +49,6 @@ test('parseFragment ignores ordinary app routes', function () {
   assert.strictEqual(pure.parseFragment(undefined), null);
 });
 
-test('device file names round-trip and reject foreign names', function () {
-  var name = pure.deviceFileName('a1b2c3d4');
-  assert.strictEqual(name, 'gtd-device-a1b2c3d4.json');
-  assert.strictEqual(pure.isDeviceFile(name), true);
-  assert.strictEqual(pure.isDeviceFile('gtd-device-.json'), false);
-  assert.strictEqual(pure.isDeviceFile('otra-cosa.json'), false);
-  assert.strictEqual(pure.isDeviceFile('gtd-device-abc.txt'), false);
-  assert.strictEqual(pure.isDeviceFile(null), false);
-});
-
 test('multipartBody builds a well-formed multipart/related payload', function () {
   var body = pure.multipartBody('BOUND', { name: 'f.json', parents: ['appDataFolder'] }, '{"v":1}');
   var parts = body.split('--BOUND');

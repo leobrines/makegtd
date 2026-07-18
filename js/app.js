@@ -430,7 +430,7 @@
       if (auth) {
         if (auth.ok) {
           toast('Cuenta de Google conectada');
-          global.GTD.drive
+          global.GTD.syncer
             .sync()
             .then(function (result) {
               if (result && result.ok) {

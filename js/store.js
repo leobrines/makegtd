@@ -19,6 +19,18 @@
 
   var DEFAULT_CONTEXTS = ['@casa', '@trabajo', '@recados', '@llamadas', '@ordenador'];
 
+  // Contexts are entities so deletions sync via tombstones, but their id IS
+  // the (normalized) name: there is no rename, the name is the identity, and
+  // two devices adding "@casa" independently converge on one entity. Default
+  // and legacy-migrated contexts get this epoch timestamp instead of the
+  // wall clock so a real deletion (tombstone) or edit on another device
+  // always wins over a fresh install or an old un-upgraded document.
+  var CONTEXT_EPOCH = '1970-01-01T00:00:00.000Z';
+
+  function contextEntity(name, stampISO) {
+    return { id: name, name: name, createdAt: stampISO, updatedAt: stampISO };
+  }
+
   // Default value lists for the Engage four-criteria model (GTD book,
   // "Engaging" chapter: context, time available, energy available, priority;
   // the vendored PDFs cover contexts but not the model itself). Each list is
@@ -36,13 +48,15 @@
 
   function defaultState() {
     return {
-      version: 2,
+      version: 3,
       items: [],
       projects: [],
       // Higher horizons of focus (Levels of Your Work): entries for horizons
       // 2 (areas of focus) through 5 (purpose and principles).
       horizons: [],
-      contexts: DEFAULT_CONTEXTS.slice(),
+      contexts: DEFAULT_CONTEXTS.map(function (name) {
+        return contextEntity(name, CONTEXT_EPOCH);
+      }),
       trash: {
         items: [],
         projects: [],
@@ -202,11 +216,18 @@
   function migrate(data) {
     var base = defaultState();
     if (!data || typeof data !== 'object') return base;
-    data.version = 2;
+    data.version = 3;
     data.items = Array.isArray(data.items) ? data.items : base.items;
     data.projects = Array.isArray(data.projects) ? data.projects : base.projects;
     data.horizons = Array.isArray(data.horizons) ? data.horizons : base.horizons;
-    data.contexts = Array.isArray(data.contexts) && data.contexts.length ? data.contexts : base.contexts;
+    // v2 -> v3: contexts were plain strings; now entities (id === name) with
+    // epoch timestamps so tombstoned deletions on other devices still win.
+    data.contexts = (Array.isArray(data.contexts) && data.contexts.length ? data.contexts : base.contexts)
+      .map(function (context) {
+        if (typeof context === 'string') return contextEntity(context, CONTEXT_EPOCH);
+        return context && context.id ? context : null;
+      })
+      .filter(Boolean);
     var trash = data.trash && typeof data.trash === 'object' ? data.trash : {};
     data.trash = {
       items: Array.isArray(trash.items) ? trash.items : [],
@@ -218,9 +239,9 @@
     Object.keys(CRITERIA).forEach(function (key) {
       if (!Array.isArray(data.settings[key])) data.settings[key] = base.settings[key];
     });
-    // v1 -> v2: every entity carries updatedAt so a future sync layer can
-    // merge by last-writer-wins. Backfill from createdAt on old data.
-    [data.items, data.projects, data.horizons, data.trash.items, data.trash.projects, data.trash.horizons].forEach(
+    // v1 -> v2: every entity carries updatedAt so the sync layer can merge
+    // by last-writer-wins. Backfill from createdAt on old data.
+    [data.items, data.projects, data.horizons, data.contexts, data.trash.items, data.trash.projects, data.trash.horizons].forEach(
       function (list) {
         list.forEach(ensureUpdatedAt);
       }
@@ -241,7 +262,8 @@
     return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
   }
 
-  // Permanent deletion marker; callers save(). type: 'item'|'project'|'horizon'.
+  // Permanent deletion marker; callers save().
+  // type: 'item'|'project'|'horizon'|'context'.
   function addTombstone(type, id) {
     load().tombstones.push({ id: id, type: type, deletedAt: new Date().toISOString() });
   }
@@ -525,8 +547,12 @@
 
   // ---- Contexts ----
 
+  // Contexts are entities internally (see contextEntity), but consumers only
+  // ever deal in names: items store the name and the UI lists names.
   function getContexts() {
-    return load().contexts;
+    return load().contexts.map(function (context) {
+      return context.name;
+    });
   }
 
   function addContext(name) {
@@ -534,9 +560,18 @@
     if (!name) return false;
     if (name.charAt(0) !== '@') name = '@' + name;
     name = name.toLowerCase().replace(/\s+/g, '-');
-    var contexts = load().contexts;
-    if (contexts.indexOf(name) !== -1) return false;
-    contexts.push(name);
+    var s = load();
+    var exists = s.contexts.some(function (context) {
+      return context.name === name;
+    });
+    if (exists) return false;
+    s.contexts.push(contextEntity(name, new Date().toISOString()));
+    // Re-adding a previously purged context: the fresh updatedAt would win
+    // the merge anyway (update-wins); drop the local tombstone eagerly so
+    // the state never carries both.
+    s.tombstones = s.tombstones.filter(function (t) {
+      return !(t.type === 'context' && t.id === name);
+    });
     save();
     return name;
   }
@@ -544,9 +579,12 @@
   function removeContext(name) {
     var s = load();
     var now = new Date().toISOString();
-    s.contexts = s.contexts.filter(function (c) {
-      return c !== name;
+    s.contexts = s.contexts.filter(function (context) {
+      return context.name !== name;
     });
+    // Contexts have no trash: removal is permanent, so it tombstones right
+    // away and the deletion propagates to other devices.
+    addTombstone('context', name);
     s.items.forEach(function (item) {
       if (item.context === name) {
         item.context = null;
