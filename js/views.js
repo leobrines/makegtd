@@ -8,8 +8,8 @@
   // Which item row is expanded into its inline editor (progressive disclosure).
   var expandedItemId = null;
 
-  // Same, for horizon entries in the Horizons view.
-  var expandedHorizonId = null;
+  // Which horizon entry the modal editor is open for (null when closed).
+  var editingHorizonId = null;
 
   // Escapes for both element and attribute contexts (quotes included: several
   // templates interpolate into value="…").
@@ -513,23 +513,24 @@
   // Higher horizons of focus (2-5). Ground and Horizon 1 live in their own
   // views (actions/agenda and projects); here each higher level is a simple
   // editable list, per the official "Levels of Your Work" altitude map.
+  // Tapping an entry opens the shared modal editor (#horizon-editor-overlay)
+  // for its title and note.
   function horizonRow(entry) {
     return (
       '<li class="card mb-2 overflow-hidden" data-horizon-id="' + entry.id + '">' +
-      '<button type="button" data-action="expand-horizon" data-id="' + entry.id + '" class="w-full text-left flex items-center gap-3 px-4 py-3 min-h-[52px]">' +
-      '<span class="flex-1 min-w-0 truncate">' + esc(entry.text) + '</span>' +
-      '</button>' +
-      (expandedHorizonId === entry.id
-        ? '<div class="border-t border-stone-100 dark:border-stone-800 px-4 py-4 space-y-3" data-horizon-editor-for="' + entry.id + '">' +
-          '<input type="text" class="field" data-field="text" value="' + esc(entry.text) + '" aria-label="Texto" />' +
-          '<div class="flex items-center justify-between gap-2 pt-1">' +
-          '<button type="button" class="btn-ghost text-red-500 dark:text-red-400" data-action="delete-horizon" data-id="' + entry.id + '">Eliminar</button>' +
-          '<button type="button" class="btn-primary" data-action="save-horizon" data-id="' + entry.id + '">Guardar</button>' +
-          '</div>' +
-          '</div>'
+      '<button type="button" data-action="edit-horizon" data-id="' + entry.id + '" aria-haspopup="dialog" class="w-full text-left px-4 py-3 min-h-[52px]">' +
+      '<span class="block truncate">' + esc(entry.text) + '</span>' +
+      (entry.note
+        ? '<span class="block truncate text-xs text-stone-400 dark:text-stone-500 mt-0.5">' + esc(entry.note) + '</span>'
         : '') +
+      '</button>' +
       '</li>'
     );
+  }
+
+  function closeHorizonEditor() {
+    editingHorizonId = null;
+    $('#horizon-editor-overlay').addClass('hidden').attr('aria-hidden', 'true');
   }
 
   function renderHorizons() {
@@ -1113,26 +1114,46 @@
       $('.horizon-form[data-level="' + level + '"] .horizon-input').trigger('focus');
     });
 
-    $view.on('click', '[data-action="expand-horizon"]', function () {
-      var id = $(this).data('id');
-      expandedHorizonId = expandedHorizonId === id ? null : id;
-      refresh();
+    // Tapping an entry (any level) opens the shared modal editor prefilled
+    // with the entry's title and note.
+    $view.on('click', '[data-action="edit-horizon"]', function () {
+      var horizon = store.getHorizon($(this).data('id'));
+      if (!horizon) return;
+      editingHorizonId = horizon.id;
+      var meta = model.horizonMeta(horizon.level);
+      $('#horizon-editor-heading').text(meta ? 'Horizonte ' + horizon.level + ' · ' + meta.title : 'Horizonte');
+      $('#horizon-editor-text').val(horizon.text);
+      $('#horizon-editor-note').val(horizon.note || '');
+      $('#horizon-editor-overlay').removeClass('hidden').attr('aria-hidden', 'false');
+      $('#horizon-editor-text').trigger('focus');
     });
 
-    $view.on('click', '[data-action="save-horizon"]', function () {
-      var id = $(this).data('id');
-      var text = $view.find('[data-horizon-editor-for="' + id + '"] [data-field="text"]').val().trim();
-      if (text) store.updateHorizon(id, { text: text });
-      expandedHorizonId = null;
+    $('#horizon-editor-form').on('submit', function (e) {
+      e.preventDefault();
+      if (!editingHorizonId) return;
+      var text = $('#horizon-editor-text').val().trim();
+      var note = $('#horizon-editor-note').val().trim();
+      if (text) store.updateHorizon(editingHorizonId, { text: text, note: note });
+      closeHorizonEditor();
       toast('Guardado');
       refresh();
     });
 
-    $view.on('click', '[data-action="delete-horizon"]', function () {
-      store.removeHorizon($(this).data('id'));
-      expandedHorizonId = null;
+    $('#horizon-editor-delete').on('click', function () {
+      if (editingHorizonId) store.removeHorizon(editingHorizonId);
+      closeHorizonEditor();
       toast('Movido a la papelera');
       refresh();
+    });
+
+    $('#horizon-editor-overlay').on('click', function (e) {
+      if (e.target === this) closeHorizonEditor();
+    });
+
+    $('#horizon-editor-close').on('click', closeHorizonEditor);
+
+    $(document).on('keydown', function (e) {
+      if (e.key === 'Escape') closeHorizonEditor();
     });
 
     $view.on('click', '[data-action="restore-horizon"]', function () {
@@ -1575,7 +1596,7 @@
     syncBackendLabel: syncBackendLabel,
     collapseEditor: function () {
       expandedItemId = null;
-      expandedHorizonId = null;
+      closeHorizonEditor();
     },
   };
 })(window, jQuery);

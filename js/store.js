@@ -436,6 +436,7 @@
       id: uid(),
       level: level,
       text: text,
+      note: '',
       createdAt: now,
       updatedAt: now,
     };
