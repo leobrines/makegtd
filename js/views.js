@@ -847,8 +847,10 @@
         'Tus datos se suben cifrados a la carpeta de datos de aplicaciones de tu Google Drive ' +
         '(<code>appDataFolder</code>), que no aparece entre tus archivos. Cada dispositivo guarda ' +
         'ahí su propio archivo; el de este es <code class="break-all">' + esc(syncStatus.fileName) + '</code>. ' +
-        'Puedes ver el espacio que ocupa o borrarla desde los ajustes de Google Drive, ' +
-        'en «Gestionar aplicaciones».' +
+        'Puedes ver el espacio que ocupa o borrarla en «Gestionar aplicaciones», dentro de ' +
+        '<a href="https://drive.google.com/drive/settings" target="_blank" rel="noopener" class="text-accent underline">los ajustes de Google Drive en la web</a>. ' +
+        'La app móvil de Drive no tiene esa opción: abre el enlace en un navegador (si no aparece, ' +
+        'activa «Versión para ordenador»).' +
         '</p>';
       html +=
         '<p class="text-xs text-stone-400 dark:text-stone-500">' +
