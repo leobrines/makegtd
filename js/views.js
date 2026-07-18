@@ -784,7 +784,10 @@
         '<li>Crea un proyecto nuevo (nombre libre, p. ej. «makegtd»).</li>' +
         '<li>Menú ☰ → «APIs y servicios» → «Biblioteca»: busca «Google Drive API» y pulsa «Habilitar».</li>' +
         '<li>Menú ☰ → «Google Auth Platform»: completa el registro inicial (nombre de la app, tu correo, público ' +
-        '«Externo»/External) y en «Audience»/«Público» añade tu propio correo como usuario de prueba (test user).</li>' +
+        '«Externo»/External). Después, en «Audience»/«Público», pulsa «Publicar aplicación» («Publish app»): ' +
+        'el permiso que usa makeGTD (solo los datos de la propia app en tu Drive) no es sensible y no requiere ' +
+        'verificación de Google. Si prefieres dejarla en modo «Testing», añade tu correo como usuario de prueba, ' +
+        'pero tendrás que volver a autorizar cada 7 días.</li>' +
         '<li>En «Google Auth Platform» → «Clientes»/«Clients» pulsa «Crear cliente»: tipo «Aplicación web». ' +
         'En «Orígenes de JavaScript autorizados» añade:<br />' +
         '<code class="break-all">' + esc(syncStatus.origin) + '</code> ' +
@@ -825,7 +828,8 @@
       html += '</div>';
       html +=
         '<p class="text-xs text-stone-400 dark:text-stone-500">' +
-        'Google puede pedirte autorizar de nuevo cada pocos días (modo de prueba): es normal. ' +
+        'Si tu proyecto de Google sigue en modo «Testing», te pedirá autorizar de nuevo cada 7 días; ' +
+        'publícalo en producción para evitarlo. ' +
         'Identificador de este dispositivo: <code>' + esc(syncStatus.deviceId) + '</code>.' +
         '</p>';
     }
