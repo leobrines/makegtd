@@ -80,7 +80,7 @@ Sync-readiness invariants (preserve them in any change): every entity (item, pro
   `history` entries and handle `popstate` so hardware back undoes exactly one step,
   same as the in-app "Volver atrás" button. See the history integration in
   `js/process.js` for the reference implementation.
-- No new runtime dependencies. No CDN URLs anywhere. Two exceptions, both optional and user-initiated, neither loading any script/asset: (1) the "add to Google Calendar" buttons open an external `calendar.google.com/calendar/render?action=TEMPLATE` URL in a new tab; (2) the opt-in Drive sync navigates to `accounts.google.com` for OAuth and `fetch`es `www.googleapis.com` — the app itself stays fully offline-functional when sync is off or unreachable.
+- No new runtime dependencies. No CDN URLs anywhere. Two exceptions, both optional and user-initiated, neither loading any script/asset: (1) the "add to Google Calendar" buttons open an external `calendar.google.com/calendar/render?action=TEMPLATE` URL in a new tab; (2) the opt-in Drive sync navigates to `accounts.google.com` for OAuth and `fetch`es `www.googleapis.com`, and its setup guide links out to `console.cloud.google.com` pages — the app itself stays fully offline-functional when sync is off or unreachable.
 - Dates are stored as ISO strings; day-level comparisons use local dates (`YYYY-MM-DD`), not UTC.
 
 ## UI/UX principles (minimalist, ADHD-friendly)
