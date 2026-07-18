@@ -196,12 +196,14 @@
 
   function status() {
     var config = getConfig();
+    var id = deviceId();
     return {
       configured: !!config,
       provider: config ? config.provider : null,
       serverUrl: config && config.provider === 'server' ? config.server.url : null,
       lastSyncAt: readJSON(LAST_SYNC_KEY),
-      deviceId: deviceId(),
+      deviceId: id,
+      fileName: deviceFileName(id),
       origin: global.location.origin,
       redirectUri: global.location.origin + global.location.pathname,
     };

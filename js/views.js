@@ -827,7 +827,7 @@
         html +=
           '<label class="block">' +
           '<span class="block">ID de cliente de Google</span>' +
-          '<input type="text" id="sync-client-id" class="field mt-1" placeholder="…apps.googleusercontent.com" autocomplete="off" />' +
+          '<input type="text" id="sync-client-id" name="client-id" class="field mt-1" placeholder="…apps.googleusercontent.com" autocomplete="off" />' +
           '</label>';
       } else {
         html +=
@@ -848,6 +848,9 @@
           '<input type="file" id="sync-keyfile-input" accept="application/json,.json" class="hidden" />' +
           '</label>';
       }
+      // Hidden username so password managers (Bitwarden, Chrome…) save the
+      // generated passphrase as a complete credential for this origin.
+      html += '<input type="hidden" name="username" value="makeGTD" autocomplete="username" />';
       html +=
         '<label class="block">' +
         '<span class="block">Frase de cifrado</span>' +
@@ -859,8 +862,9 @@
         'conservan sus datos).' +
         '</span>' +
         '<span class="flex gap-2">' +
-        '<input type="password" id="sync-passphrase" class="field flex-1" autocomplete="new-password" />' +
-        '<button type="button" class="btn-secondary" data-action="sync-generate-passphrase">Generar</button>' +
+        '<input type="password" id="sync-passphrase" name="passphrase" class="field flex-1" autocomplete="new-password" />' +
+        '<button type="button" class="btn-secondary shrink-0" data-action="sync-generate-passphrase">Generar</button>' +
+        '<button type="button" class="btn-ghost shrink-0" data-action="toggle-passphrase" aria-pressed="false">Mostrar</button>' +
         '</span>' +
         '</label>';
       html +=
@@ -886,14 +890,30 @@
       }
       html += '<button type="button" class="btn-ghost text-red-500 dark:text-red-400" data-action="sync-disconnect">Desconectar…</button>';
       html += '</div>';
-      html +=
-        '<p class="text-xs text-stone-400 dark:text-stone-500">' +
-        (syncStatus.provider === 'gdrive'
-          ? 'Si tu proyecto de Google sigue en modo «Testing», te pedirá autorizar de nuevo cada 7 días; ' +
-            'publícalo en producción para evitarlo. '
-          : 'El archivo de llave (protegido con contraseña) configura tus otros dispositivos sin teclear nada. ') +
-        'Identificador de este dispositivo: <code>' + esc(syncStatus.deviceId) + '</code>.' +
-        '</p>';
+      if (syncStatus.provider === 'gdrive') {
+        html +=
+          '<p class="text-xs text-stone-400 dark:text-stone-500">' +
+          'Tus datos se suben cifrados a la carpeta de datos de aplicaciones de tu Google Drive ' +
+          '(<code>appDataFolder</code>), que no aparece entre tus archivos. Cada dispositivo guarda ' +
+          'ahí su propio archivo; el de este es <code class="break-all">' + esc(syncStatus.fileName) + '</code>. ' +
+          'Puedes ver el espacio que ocupa o borrarla en «Gestionar aplicaciones», dentro de ' +
+          '<a href="https://drive.google.com/drive/settings" target="_blank" rel="noopener" class="text-accent underline">los ajustes de Google Drive en la web</a>. ' +
+          'La app móvil de Drive no tiene esa opción: abre el enlace en un navegador (si no aparece, ' +
+          'activa «Versión para ordenador»).' +
+          '</p>';
+        html +=
+          '<p class="text-xs text-stone-400 dark:text-stone-500">' +
+          'Si tu proyecto de Google sigue en modo «Testing», te pedirá autorizar de nuevo cada 7 días; ' +
+          'publícalo en producción para evitarlo.' +
+          '</p>';
+      } else {
+        html +=
+          '<p class="text-xs text-stone-400 dark:text-stone-500">' +
+          'Cada dispositivo guarda su propio archivo cifrado en el servidor; el de este es ' +
+          '<code class="break-all">' + esc(syncStatus.fileName) + '</code>. ' +
+          'El archivo de llave (protegido con contraseña) configura tus otros dispositivos sin teclear nada.' +
+          '</p>';
+      }
     }
     html += '</div>';
 
@@ -1347,6 +1367,13 @@
       syncNow(); // On Google Drive, the first sync triggers the consent redirect.
     });
 
+    $view.on('click', '[data-action="toggle-passphrase"]', function () {
+      var $input = $('#sync-passphrase');
+      var show = $input.attr('type') === 'password';
+      $input.attr('type', show ? 'text' : 'password');
+      $(this).text(show ? 'Ocultar' : 'Mostrar').attr('aria-pressed', String(show));
+    });
+
     $view.on('click', '[data-action="sync-now"]', syncNow);
 
     // Key file import: fills the server form from a (usually encrypted)
@@ -1412,6 +1439,7 @@
         })
         .join('');
       $('#sync-passphrase').attr('type', 'text').val(phrase);
+      $view.find('[data-action="toggle-passphrase"]').text('Ocultar').attr('aria-pressed', 'true');
       toast('Frase generada: guárdala antes de continuar');
     });
 
