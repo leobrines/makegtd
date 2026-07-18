@@ -814,7 +814,10 @@
         'Usa la misma frase en todos tus dispositivos. No se puede recuperar: si la olvidas, la copia remota ' +
         'será ilegible (tus dispositivos conservan sus datos). Tu gestor de contraseñas puede generarla y guardarla.' +
         '</span>' +
+        '<span class="flex gap-2">' +
         '<input type="password" id="sync-passphrase" name="passphrase" class="field" autocomplete="new-password" />' +
+        '<button type="button" class="btn-ghost shrink-0" data-action="toggle-passphrase" aria-pressed="false">Mostrar</button>' +
+        '</span>' +
         '</label>';
       html += '<button type="submit" class="btn-primary">Guardar y conectar con Google</button>';
       html += '</form>';
@@ -1267,6 +1270,13 @@
         return;
       }
       syncNow(); // First sync triggers the Google consent redirect.
+    });
+
+    $view.on('click', '[data-action="toggle-passphrase"]', function () {
+      var $input = $('#sync-passphrase');
+      var show = $input.attr('type') === 'password';
+      $input.attr('type', show ? 'text' : 'password');
+      $(this).text(show ? 'Ocultar' : 'Mostrar').attr('aria-pressed', String(show));
     });
 
     $view.on('click', '[data-action="sync-now"]', syncNow);
