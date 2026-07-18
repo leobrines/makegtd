@@ -1,5 +1,5 @@
 /* Service worker: precache everything, serve cache-first. Bump CACHE_VERSION on any asset change. */
-var CACHE_VERSION = 'makegtd-v19';
+var CACHE_VERSION = 'makegtd-v23';
 
 var PRECACHE = [
   './',
@@ -8,6 +8,9 @@ var PRECACHE = [
   'css/styles.css',
   'js/vendor/jquery.min.js',
   'js/store.js',
+  'js/sync.js',
+  'js/crypto.js',
+  'js/drive.js',
   'js/model.js',
   'js/views.js',
   'js/process.js',
@@ -55,6 +58,8 @@ self.addEventListener('activate', function (event) {
 
 self.addEventListener('fetch', function (event) {
   if (event.request.method !== 'GET') return;
+  // Cross-origin requests (Drive sync API calls) go straight to the network.
+  if (new URL(event.request.url).origin !== self.location.origin) return;
   event.respondWith(
     caches.match(event.request, { ignoreSearch: true }).then(function (cached) {
       return (

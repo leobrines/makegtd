@@ -766,6 +766,75 @@
     );
     html += '</div>';
 
+    html += sectionTitle('Sincronización entre dispositivos');
+    html += '<div class="card px-4 py-4 space-y-3">';
+    var syncStatus = global.GTD.drive.status();
+    if (!syncStatus.configured) {
+      html +=
+        '<p class="text-sm text-stone-500 dark:text-stone-400">' +
+        'Opcional: guarda una copia cifrada en tu propio Google Drive y mantén makeGTD igual en tu móvil, ' +
+        'portátil u otros dispositivos. Los datos se cifran en este dispositivo antes de subirse: ni Google puede leerlos.' +
+        '</p>';
+      html +=
+        '<details class="text-sm">' +
+        '<summary class="cursor-pointer min-h-[44px] flex items-center text-accent">Guía: crear tu acceso en Google (una sola vez)</summary>' +
+        '<ol class="list-decimal ml-5 space-y-2 mt-2 text-stone-600 dark:text-stone-300">' +
+        '<li>Abre <code>console.cloud.google.com</code> con tu cuenta de Google. Desde el móvil usa el navegador ' +
+        '(la app de Google Cloud no permite crear credenciales); si algo no aparece, activa «Versión para ordenador».</li>' +
+        '<li>Crea un proyecto nuevo (nombre libre, p. ej. «makegtd»).</li>' +
+        '<li>Menú ☰ → «APIs y servicios» → «Biblioteca»: busca «Google Drive API» y pulsa «Habilitar».</li>' +
+        '<li>Menú ☰ → «Google Auth Platform»: completa el registro inicial (nombre de la app, tu correo, público ' +
+        '«Externo»/External). Después, en «Audience»/«Público», pulsa «Publicar aplicación» («Publish app»): ' +
+        'el permiso que usa makeGTD (solo los datos de la propia app en tu Drive) no es sensible y no requiere ' +
+        'verificación de Google. Si prefieres dejarla en modo «Testing», añade tu correo como usuario de prueba, ' +
+        'pero tendrás que volver a autorizar cada 7 días.</li>' +
+        '<li>En «Google Auth Platform» → «Clientes»/«Clients» pulsa «Crear cliente»: tipo «Aplicación web». ' +
+        'En «Orígenes de JavaScript autorizados» añade:<br />' +
+        '<code class="break-all">' + esc(syncStatus.origin) + '</code> ' +
+        '<button type="button" class="btn-ghost" data-action="copy-value" data-value="' + esc(syncStatus.origin) + '">Copiar</button><br />' +
+        'y en «URI de redireccionamiento autorizados» añade:<br />' +
+        '<code class="break-all">' + esc(syncStatus.redirectUri) + '</code> ' +
+        '<button type="button" class="btn-ghost" data-action="copy-value" data-value="' + esc(syncStatus.redirectUri) + '">Copiar</button></li>' +
+        '<li>Copia el «ID de cliente» (termina en <code>.apps.googleusercontent.com</code>) y pégalo aquí abajo. ' +
+        'Los cambios en Google pueden tardar unos minutos en activarse.</li>' +
+        '</ol></details>';
+      html += '<form id="sync-config-form" class="space-y-3">';
+      html +=
+        '<label class="block">' +
+        '<span class="block">ID de cliente de Google</span>' +
+        '<input type="text" id="sync-client-id" class="field mt-1" placeholder="…apps.googleusercontent.com" autocomplete="off" />' +
+        '</label>';
+      html +=
+        '<label class="block">' +
+        '<span class="block">Frase de cifrado</span>' +
+        '<span class="block text-xs text-stone-400 dark:text-stone-500 mt-0.5 mb-1">' +
+        'Usa la misma frase en todos tus dispositivos. No se puede recuperar: si la olvidas, la copia remota ' +
+        'será ilegible (tus dispositivos conservan sus datos).' +
+        '</span>' +
+        '<input type="password" id="sync-passphrase" class="field" autocomplete="new-password" />' +
+        '</label>';
+      html += '<button type="submit" class="btn-primary">Guardar y conectar con Google</button>';
+      html += '</form>';
+    } else {
+      html +=
+        '<p class="text-sm text-stone-500 dark:text-stone-400">Conectado a tu Google Drive. ' +
+        (syncStatus.lastSyncAt
+          ? 'Última sincronización: ' + model.formatDate(syncStatus.lastSyncAt) + '.'
+          : 'Aún sin sincronizar.') +
+        '</p>';
+      html += '<div class="flex flex-wrap gap-2">';
+      html += '<button type="button" class="btn-secondary" data-action="sync-now">Sincronizar ahora</button>';
+      html += '<button type="button" class="btn-ghost text-red-500 dark:text-red-400" data-action="sync-disconnect">Desconectar…</button>';
+      html += '</div>';
+      html +=
+        '<p class="text-xs text-stone-400 dark:text-stone-500">' +
+        'Si tu proyecto de Google sigue en modo «Testing», te pedirá autorizar de nuevo cada 7 días; ' +
+        'publícalo en producción para evitarlo. ' +
+        'Identificador de este dispositivo: <code>' + esc(syncStatus.deviceId) + '</code>.' +
+        '</p>';
+    }
+    html += '</div>';
+
     html += sectionTitle('Tus datos');
     html += '<div class="card px-4 py-4 space-y-3">';
     html += '<p class="text-sm text-stone-500 dark:text-stone-400">Todo se guarda solo en este dispositivo. Exporta una copia de vez en cuando.</p>';
@@ -1168,6 +1237,70 @@
       toast('Datos borrados');
       refresh();
     });
+
+    // ---- Sync (Google Drive) ----
+
+    function syncNow() {
+      toast('Sincronizando…');
+      global.GTD.drive
+        .sync()
+        .then(function (result) {
+          // {redirecting: true} means the page is leaving for Google's
+          // consent screen; the flow resumes at boot after the redirect.
+          if (result && result.ok) {
+            toast('Sincronizado ✅');
+            refresh();
+          }
+        })
+        .catch(function (err) {
+          toast(syncErrorMessage(err));
+        });
+    }
+
+    $view.on('submit', '#sync-config-form', function (e) {
+      e.preventDefault();
+      if (!global.GTD.drive.setConfig($('#sync-client-id').val(), $('#sync-passphrase').val())) {
+        toast('Faltan el ID de cliente o la frase de cifrado');
+        return;
+      }
+      syncNow(); // First sync triggers the Google consent redirect.
+    });
+
+    $view.on('click', '[data-action="sync-now"]', syncNow);
+
+    $view.on('click', '[data-action="sync-disconnect"]', function () {
+      if (!global.confirm('¿Desconectar la sincronización en este dispositivo? Tus datos locales se conservan; la copia en Drive no se borra.')) return;
+      global.GTD.drive.disconnect();
+      toast('Sincronización desconectada');
+      refresh();
+    });
+
+    $view.on('click', '[data-action="copy-value"]', function () {
+      var value = String($(this).data('value'));
+      if (global.navigator.clipboard && global.navigator.clipboard.writeText) {
+        global.navigator.clipboard.writeText(value).then(
+          function () {
+            toast('Copiado');
+          },
+          function () {
+            global.prompt('Copia este valor:', value);
+          }
+        );
+      } else {
+        global.prompt('Copia este valor:', value);
+      }
+    });
+  }
+
+  // Spanish UI message for a sync failure (error codes come from js/drive.js
+  // and js/crypto.js). Also used by app.js after the OAuth redirect.
+  function syncErrorMessage(err) {
+    var code = (err && err.message) || '';
+    if (code === 'auth-expired') return 'La sesión de Google caducó. Pulsa «Sincronizar ahora» para volver a conectar.';
+    if (code === 'decrypt-failed') return 'La frase de cifrado no coincide con la de tus otros dispositivos.';
+    if (code === 'not-configured') return 'Configura la sincronización en Ajustes primero.';
+    if (code.indexOf('drive-http-') === 0) return 'Google Drive respondió con un error (' + code.slice('drive-http-'.length) + '). Inténtalo de nuevo.';
+    return 'No se pudo sincronizar. Comprueba tu conexión e inténtalo de nuevo.';
   }
 
   global.GTD.views = {
@@ -1191,6 +1324,7 @@
     renderReference: renderReference,
     renderTrash: renderTrash,
     renderSettings: renderSettings,
+    syncErrorMessage: syncErrorMessage,
     collapseEditor: function () {
       expandedItemId = null;
       expandedHorizonId = null;

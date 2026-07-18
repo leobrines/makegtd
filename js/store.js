@@ -631,6 +631,14 @@
     save();
   }
 
+  // Swap the whole in-memory state for a merged document (sync layer). The
+  // document is normalized through migrate() and persisted atomically.
+  function replaceState(doc) {
+    state = migrate(doc);
+    save();
+    return state;
+  }
+
   global.GTD = global.GTD || {};
   global.GTD.store = {
     init: init,
@@ -668,5 +676,6 @@
     exportJSON: exportJSON,
     importJSON: importJSON,
     clearAll: clearAll,
+    replaceState: replaceState,
   };
 })(window);

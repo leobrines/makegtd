@@ -391,6 +391,10 @@
     // Persistence is async (IndexedDB): nothing may touch the store until
     // init() resolves. It never rejects — it falls back to localStorage.
     store.init().then(function () {
+      // Must run before the router reads location.hash: an OAuth redirect
+      // from Google comes back with the access token in the fragment.
+      var auth = global.GTD.drive.handleRedirect();
+
       views.bind();
       global.GTD.process.bind();
       global.GTD.review.bind();
@@ -419,6 +423,27 @@
       // pressure (granted silently to installed PWAs; harmless if denied).
       if (navigator.storage && navigator.storage.persist) {
         navigator.storage.persist().catch(function () {});
+      }
+
+      // Coming back from Google's consent screen: finish the sync the user
+      // started before the redirect.
+      if (auth) {
+        if (auth.ok) {
+          toast('Cuenta de Google conectada');
+          global.GTD.drive
+            .sync()
+            .then(function (result) {
+              if (result && result.ok) {
+                toast('Sincronizado ✅');
+                refresh();
+              }
+            })
+            .catch(function (err) {
+              toast(views.syncErrorMessage(err));
+            });
+        } else {
+          toast('No se pudo conectar con Google');
+        }
       }
     });
   });
