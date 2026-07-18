@@ -169,10 +169,12 @@
 
   function status() {
     var last = readJSON(global.localStorage, LAST_SYNC_KEY);
+    var id = deviceId();
     return {
       configured: !!getConfig(),
       lastSyncAt: last || null,
-      deviceId: deviceId(),
+      deviceId: id,
+      fileName: deviceFileName(id),
       redirectUri: redirectUri(),
       origin: global.location.origin,
     };
