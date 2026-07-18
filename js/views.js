@@ -844,9 +844,16 @@
       html += '</div>';
       html +=
         '<p class="text-xs text-stone-400 dark:text-stone-500">' +
+        'Tus datos se suben cifrados a la carpeta de datos de aplicaciones de tu Google Drive ' +
+        '(<code>appDataFolder</code>), que no aparece entre tus archivos. Cada dispositivo guarda ' +
+        'ahí su propio archivo; el de este es <code class="break-all">' + esc(syncStatus.fileName) + '</code>. ' +
+        'Puedes ver el espacio que ocupa o borrarla desde los ajustes de Google Drive, ' +
+        'en «Gestionar aplicaciones».' +
+        '</p>';
+      html +=
+        '<p class="text-xs text-stone-400 dark:text-stone-500">' +
         'Si tu proyecto de Google sigue en modo «Testing», te pedirá autorizar de nuevo cada 7 días; ' +
-        'publícalo en producción para evitarlo. ' +
-        'Identificador de este dispositivo: <code>' + esc(syncStatus.deviceId) + '</code>.' +
+        'publícalo en producción para evitarlo.' +
         '</p>';
     }
     html += '</div>';
