@@ -57,12 +57,13 @@ Scripts share a single global namespace `GTD` and are loaded in this order (orde
 1. `js/vendor/jquery.min.js`
 2. `js/store.js` — persistence layer (IndexedDB, localStorage fallback): async `init()` required before any access, then synchronous in-memory state with atomic whole-state writes; CRUD for items/projects/contexts, JSON export/import, tombstones for permanent deletions.
 3. `js/sync.js` — pure state-merge engine for multi-device sync: `GTD.sync.merge(docs)` resolves entities last-writer-wins by `updatedAt` and applies tombstones, deterministically and without I/O or clock reads. Unit-tested via `npm test` (`test/sync.test.js`, plain Node, no framework); run it after touching merge semantics.
-4. `js/crypto.js` — end-to-end encryption for sync payloads: `GTD.crypto.encryptString/decryptString` (native WebCrypto, PBKDF2-SHA256 + AES-256-GCM, self-describing JSON envelope, passphrase never stored). Unit-tested via `npm test` (`test/crypto.test.js`).
-5. `js/model.js` — domain constants (item statuses, labels), factories, pure helpers (overdue/scheduled-today queries, projects without a next action, focus limit).
-6. `js/views.js` — render functions for each view (jQuery-built DOM).
-7. `js/process.js` — the Clarify wizard (GTD decision tree, one item and one decision at a time).
-8. `js/review.js` — the guided weekly review wizard.
-9. `js/app.js` — hash router (`#/hoy`, `#/entrada`, …), navigation shell, global quick-capture, service worker registration.
+4. `js/crypto.js` — end-to-end encryption for sync payloads: `GTD.crypto.encryptString/decryptString` (native WebCrypto, PBKDF2-SHA256 + AES-256-GCM, self-describing JSON envelope, passphrase never stored server-side). Unit-tested via `npm test` (`test/crypto.test.js`).
+5. `js/drive.js` — opt-in Google Drive sync transport + orchestration: OAuth 2.0 implicit flow (full-page redirect to `accounts.google.com`, no external scripts — GIS is a CDN load and stays banned), encrypted per-device files (`gtd-device-<id>.json`) in the user's `appDataFolder` via the Drive REST v3 API, merge through `GTD.sync.merge`. Each user brings their own OAuth Client ID (the Settings view has the step-by-step guide). Device-local keys (`localStorage`: `gtd:device-id`, `gtd:sync:gdrive` — includes the passphrase, deliberately device-local — and `gtd:sync:last`; `sessionStorage`: token + OAuth state) are never part of the synced document. `app.js` must call `GTD.drive.handleRedirect()` at boot before the router reads `location.hash`. Pure helpers unit-tested via `npm test` (`test/drive.test.js`).
+6. `js/model.js` — domain constants (item statuses, labels), factories, pure helpers (overdue/scheduled-today queries, projects without a next action, focus limit).
+7. `js/views.js` — render functions for each view (jQuery-built DOM).
+8. `js/process.js` — the Clarify wizard (GTD decision tree, one item and one decision at a time).
+9. `js/review.js` — the guided weekly review wizard.
+10. `js/app.js` — hash router (`#/hoy`, `#/entrada`, …), navigation shell, global quick-capture, service worker registration.
 
 ### Data model
 
@@ -79,7 +80,7 @@ Sync-readiness invariants (preserve them in any change): every entity (item, pro
   `history` entries and handle `popstate` so hardware back undoes exactly one step,
   same as the in-app "Volver atrás" button. See the history integration in
   `js/process.js` for the reference implementation.
-- No new runtime dependencies. No CDN URLs anywhere. Sole exception: the optional, user-initiated "add to Google Calendar" buttons open an external `calendar.google.com/calendar/render?action=TEMPLATE` URL in a new tab (no assets are fetched; the app itself stays fully offline).
+- No new runtime dependencies. No CDN URLs anywhere. Two exceptions, both optional and user-initiated, neither loading any script/asset: (1) the "add to Google Calendar" buttons open an external `calendar.google.com/calendar/render?action=TEMPLATE` URL in a new tab; (2) the opt-in Drive sync navigates to `accounts.google.com` for OAuth and `fetch`es `www.googleapis.com` — the app itself stays fully offline-functional when sync is off or unreachable.
 - Dates are stored as ISO strings; day-level comparisons use local dates (`YYYY-MM-DD`), not UTC.
 
 ## UI/UX principles (minimalist, ADHD-friendly)
