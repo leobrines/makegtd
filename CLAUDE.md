@@ -46,7 +46,7 @@ silently implementing it.
 npm install            # once, installs tailwindcss (dev-only)
 npm run build:css      # regenerate css/styles.css (required after changing any Tailwind classes)
 npm run watch:css      # same, in watch mode
-npm test               # unit tests for the sync merge engine (plain Node, no framework)
+npm test               # unit tests for the sync merge engine and crypto layer (plain Node, no framework)
 python3 -m http.server 8080   # serve locally (service workers need http://localhost, not file://)
 ```
 
@@ -57,11 +57,12 @@ Scripts share a single global namespace `GTD` and are loaded in this order (orde
 1. `js/vendor/jquery.min.js`
 2. `js/store.js` — persistence layer (IndexedDB, localStorage fallback): async `init()` required before any access, then synchronous in-memory state with atomic whole-state writes; CRUD for items/projects/contexts, JSON export/import, tombstones for permanent deletions.
 3. `js/sync.js` — pure state-merge engine for multi-device sync: `GTD.sync.merge(docs)` resolves entities last-writer-wins by `updatedAt` and applies tombstones, deterministically and without I/O or clock reads. Unit-tested via `npm test` (`test/sync.test.js`, plain Node, no framework); run it after touching merge semantics.
-4. `js/model.js` — domain constants (item statuses, labels), factories, pure helpers (overdue/scheduled-today queries, projects without a next action, focus limit).
-5. `js/views.js` — render functions for each view (jQuery-built DOM).
-6. `js/process.js` — the Clarify wizard (GTD decision tree, one item and one decision at a time).
-7. `js/review.js` — the guided weekly review wizard.
-8. `js/app.js` — hash router (`#/hoy`, `#/entrada`, …), navigation shell, global quick-capture, service worker registration.
+4. `js/crypto.js` — end-to-end encryption for sync payloads: `GTD.crypto.encryptString/decryptString` (native WebCrypto, PBKDF2-SHA256 + AES-256-GCM, self-describing JSON envelope, passphrase never stored). Unit-tested via `npm test` (`test/crypto.test.js`).
+5. `js/model.js` — domain constants (item statuses, labels), factories, pure helpers (overdue/scheduled-today queries, projects without a next action, focus limit).
+6. `js/views.js` — render functions for each view (jQuery-built DOM).
+7. `js/process.js` — the Clarify wizard (GTD decision tree, one item and one decision at a time).
+8. `js/review.js` — the guided weekly review wizard.
+9. `js/app.js` — hash router (`#/hoy`, `#/entrada`, …), navigation shell, global quick-capture, service worker registration.
 
 ### Data model
 
