@@ -435,6 +435,50 @@
       </div>
     </div>
 
+    <!-- Horizon entry editor: tapping any entry in the Horizons view (levels 2-5)
+         opens this modal to edit its title and note. All levels share it; the
+         heading is filled in with the entry's horizon level. -->
+    <div id="horizon-editor-overlay" class="fixed inset-0 z-50 hidden bg-stone-900/40 dark:bg-black/60" aria-hidden="true">
+      <div class="max-w-lg mx-auto mt-[18vh] px-4">
+        <form
+          id="horizon-editor-form"
+          class="relative bg-white dark:bg-stone-900 rounded-2xl p-5 border border-stone-200 dark:border-stone-700"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="horizon-editor-heading"
+        >
+          <button
+            id="horizon-editor-close"
+            type="button"
+            aria-label="Cerrar"
+            class="absolute top-1 right-1 w-11 h-11 flex items-center justify-center text-2xl leading-none text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300 transition-colors duration-150"
+          >&times;</button>
+          <h2 id="horizon-editor-heading" class="font-semibold text-lg tracking-tight mb-4"></h2>
+          <div class="space-y-3">
+            <input
+              id="horizon-editor-text"
+              type="text"
+              class="field"
+              autocomplete="off"
+              placeholder="Título"
+              aria-label="Título"
+            />
+            <textarea
+              id="horizon-editor-note"
+              rows="4"
+              class="field"
+              placeholder="Nota (opcional)"
+              aria-label="Nota"
+            ></textarea>
+          </div>
+          <div class="flex items-center justify-between gap-2 mt-4">
+            <button type="button" id="horizon-editor-delete" class="btn-ghost text-red-500 dark:text-red-400">Eliminar</button>
+            <button type="submit" class="btn-primary">Guardar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <!-- Transient confirmation toast -->
     <div
       id="toast"
