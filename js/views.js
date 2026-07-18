@@ -802,16 +802,19 @@
       html +=
         '<label class="block">' +
         '<span class="block">ID de cliente de Google</span>' +
-        '<input type="text" id="sync-client-id" class="field mt-1" placeholder="…apps.googleusercontent.com" autocomplete="off" />' +
+        '<input type="text" id="sync-client-id" name="client-id" class="field mt-1" placeholder="…apps.googleusercontent.com" autocomplete="off" />' +
         '</label>';
+      // Hidden username so password managers (Bitwarden, Chrome…) save the
+      // generated passphrase as a complete credential for this origin.
+      html += '<input type="hidden" name="username" value="makeGTD" autocomplete="username" />';
       html +=
         '<label class="block">' +
         '<span class="block">Frase de cifrado</span>' +
         '<span class="block text-xs text-stone-400 dark:text-stone-500 mt-0.5 mb-1">' +
         'Usa la misma frase en todos tus dispositivos. No se puede recuperar: si la olvidas, la copia remota ' +
-        'será ilegible (tus dispositivos conservan sus datos).' +
+        'será ilegible (tus dispositivos conservan sus datos). Tu gestor de contraseñas puede generarla y guardarla.' +
         '</span>' +
-        '<input type="password" id="sync-passphrase" class="field" autocomplete="new-password" />' +
+        '<input type="password" id="sync-passphrase" name="passphrase" class="field" autocomplete="new-password" />' +
         '</label>';
       html += '<button type="submit" class="btn-primary">Guardar y conectar con Google</button>';
       html += '</form>';
