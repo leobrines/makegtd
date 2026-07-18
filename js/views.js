@@ -808,8 +808,11 @@
       html +=
         '<label class="block">' +
         '<span class="block">ID de cliente de Google</span>' +
-        '<input type="text" id="sync-client-id" class="field mt-1" placeholder="…apps.googleusercontent.com" autocomplete="off" />' +
+        '<input type="text" id="sync-client-id" name="client-id" class="field mt-1" placeholder="…apps.googleusercontent.com" autocomplete="off" />' +
         '</label>';
+      // Hidden username so password managers (Bitwarden, Chrome…) save the
+      // generated passphrase as a complete credential for this origin.
+      html += '<input type="hidden" name="username" value="makeGTD" autocomplete="username" />';
       html +=
         '<label class="block">' +
         '<span class="block">Frase de cifrado</span>' +
@@ -821,8 +824,9 @@
         'conservan sus datos).' +
         '</span>' +
         '<span class="flex gap-2">' +
-        '<input type="password" id="sync-passphrase" class="field flex-1" autocomplete="new-password" />' +
-        '<button type="button" class="btn-secondary" data-action="sync-generate-passphrase">Generar</button>' +
+        '<input type="password" id="sync-passphrase" name="passphrase" class="field flex-1" autocomplete="new-password" />' +
+        '<button type="button" class="btn-secondary shrink-0" data-action="sync-generate-passphrase">Generar</button>' +
+        '<button type="button" class="btn-ghost shrink-0" data-action="toggle-passphrase" aria-pressed="false">Mostrar</button>' +
         '</span>' +
         '</label>';
       html += '<button type="submit" class="btn-primary">Guardar y conectar con Google</button>';
@@ -1278,6 +1282,13 @@
       syncNow(); // First sync triggers the Google consent redirect.
     });
 
+    $view.on('click', '[data-action="toggle-passphrase"]', function () {
+      var $input = $('#sync-passphrase');
+      var show = $input.attr('type') === 'password';
+      $input.attr('type', show ? 'text' : 'password');
+      $(this).text(show ? 'Ocultar' : 'Mostrar').attr('aria-pressed', String(show));
+    });
+
     $view.on('click', '[data-action="sync-now"]', syncNow);
 
     // Fills the field with a strong random phrase (~79 bits; confusable
@@ -1291,6 +1302,7 @@
         })
         .join('');
       $('#sync-passphrase').attr('type', 'text').val(phrase);
+      $view.find('[data-action="toggle-passphrase"]').text('Ocultar').attr('aria-pressed', 'true');
       toast('Frase generada: guárdala antes de continuar');
     });
 
