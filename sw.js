@@ -1,5 +1,5 @@
 /* Service worker: precache everything, serve cache-first. Bump CACHE_VERSION on any asset change. */
-var CACHE_VERSION = 'makegtd-v29';
+var CACHE_VERSION = 'makegtd-v30';
 
 var PRECACHE = [
   './',
