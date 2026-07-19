@@ -558,6 +558,107 @@
     return html;
   }
 
+  // ---- AI section ----
+  // Ready-to-copy prompts to review parts of the system with any external AI.
+  // The app never talks to an AI service: the user copies the text and pastes
+  // it wherever they choose, so the PWA stays fully offline.
+
+  // Prompt asking an AI to review the user's higher horizons (levels 2-5).
+  // The per-level rules embedded in the text come from the official documents
+  // "Levels of Your Work" and "The 6 Horizons of Focus" (docs/gtd/README.md),
+  // so the AI grounds its review in the canonical sources rather than lore.
+  function buildHorizonsReviewPrompt() {
+    var lines = [
+      'Actúa como un coach experto en GTD® (Getting Things Done, de David Allen).',
+      '',
+      'Revisa mis horizontes de enfoque (niveles 2–5). Básate exclusivamente en las fuentes oficiales de la David Allen Company — «Levels of Your Work®» y el artículo «The 6 Horizons of Focus®» (gettingthingsdone.com) — y señala cualquier cosa que las contradiga.',
+      '',
+      'Reglas oficiales que debes aplicar:',
+      '- Las prioridades fluyen de arriba hacia abajo: el propósito y los principios (H5) guían la visión (H4), la visión crea metas y objetivos (H3), las metas encuadran las áreas de enfoque (H2), y de todo ello nacen los proyectos (H1) y las acciones.',
+      '- Horizonte 5 · Propósito y principios: por qué haces lo que haces y los estándares de conducta innegociables.',
+      '- Horizonte 4 · Visión: cómo se verá, sonará y sentirá el éxito a largo plazo (3–5 años).',
+      '- Horizonte 3 · Metas y objetivos: qué quieres y necesitas lograr en los próximos 12–24 meses.',
+      '- Horizonte 2 · Áreas de enfoque y responsabilidad: esferas de trabajo y vida que se mantienen, no se terminan; lo habitual es tener entre cuatro y siete; un resultado con final es un proyecto (H1), no un área.',
+      '',
+      'Para cada entrada dime:',
+      '1. Si está en el horizonte correcto y, si no, a cuál moverla.',
+      '2. Si está bien formulada para su nivel; propón una redacción mejor cuando aplique.',
+      '3. Qué falta o sobra en cada nivel: huecos, solapamientos, áreas sin metas, metas que no apuntan a la visión…',
+      '',
+      'Termina con un resumen de los 3 cambios más importantes. Si te falta contexto, pregúntame antes de asumir.',
+      '',
+      'Mis horizontes:',
+    ];
+    model.HORIZONS.forEach(function (h) {
+      lines.push('');
+      lines.push('## Horizonte ' + h.level + ' · ' + h.title);
+      var entries = model.horizonItems(h.level);
+      if (!entries.length) {
+        lines.push('(sin entradas todavía)');
+        return;
+      }
+      entries.forEach(function (entry) {
+        lines.push('- ' + entry.text);
+        if (entry.note) lines.push('  Nota: ' + entry.note.replace(/\n/g, '\n  '));
+      });
+    });
+    return lines.join('\n');
+  }
+
+  // One copyable prompt: title + explanation, the copy button, and the full
+  // text behind a collapsed <details> (progressive disclosure).
+  function aiPromptCard(opts) {
+    return (
+      '<div class="card px-4 py-4 mb-2">' +
+      '<h3 class="font-medium">' + esc(opts.title) + '</h3>' +
+      '<p class="text-sm text-stone-500 dark:text-stone-400 mt-1">' + esc(opts.description) + '</p>' +
+      '<div class="mt-3">' +
+      '<button type="button" class="btn-primary" data-action="copy-ai-prompt" data-prompt="' + esc(opts.key) + '">Copiar prompt</button>' +
+      '</div>' +
+      '<details class="text-sm mt-2">' +
+      '<summary class="cursor-pointer min-h-[44px] flex items-center text-accent">Ver el prompt completo</summary>' +
+      '<pre class="whitespace-pre-wrap font-sans text-xs text-stone-500 dark:text-stone-400 border-t border-stone-100 dark:border-stone-800 pt-3">' + esc(opts.text) + '</pre>' +
+      '</details>' +
+      '</div>'
+    );
+  }
+
+  function renderAI() {
+    var html = header(
+      'IA',
+      'Prompts listos para copiar y pegar en la IA que prefieras. La app no envía nada a ningún servicio: tú copias y tú decides.'
+    );
+    if (!model.horizonsEnabled()) {
+      return html + emptyState(
+        '✨',
+        'El primer prompt trabaja sobre tus Horizontes, que ahora están desactivados.',
+        'Activarlos en Ajustes',
+        '#/ajustes'
+      );
+    }
+    var hasEntries = model.HORIZONS.some(function (h) {
+      return model.horizonItems(h.level).length > 0;
+    });
+    if (!hasEntries) {
+      return html + emptyState(
+        '🧭',
+        'Define primero tus horizontes: el prompt los incluye con su título y sus notas.',
+        'Ir a Horizontes',
+        '#/horizontes'
+      );
+    }
+    html += sectionTitle('Revisar tu sistema');
+    html += aiPromptCard({
+      key: 'horizons-review',
+      title: 'Revisar mis horizontes',
+      description:
+        'Copia todos tus horizontes (título y notas) junto con las reglas oficiales de GTD, ' +
+        'y pídele a una IA que revise si cada entrada está en el nivel correcto y qué deberías mejorar.',
+      text: buildHorizonsReviewPrompt(),
+    });
+    return html;
+  }
+
   function renderReference() {
     var items = model.referenceItems();
     var html = header('Referencia', 'Material útil que no requiere acción.');
@@ -1536,6 +1637,11 @@
       toast('Frase generada: guárdala antes de continuar');
     });
 
+    $view.on('click', '[data-action="copy-ai-prompt"]', function () {
+      var key = $(this).data('prompt');
+      if (key === 'horizons-review') copyToClipboard(buildHorizonsReviewPrompt());
+    });
+
     $view.on('click', '[data-action="copy-value"]', function () {
       var value = String($(this).data('value'));
       if (global.navigator.clipboard && global.navigator.clipboard.writeText) {
@@ -1551,6 +1657,36 @@
         global.prompt('Copia este valor:', value);
       }
     });
+  }
+
+  // Copies long multi-line text (AI prompts). navigator.clipboard needs a
+  // secure context (the PWA normally runs in one); the hidden-textarea path
+  // covers the rest — window.prompt would mangle multi-line text.
+  function copyToClipboard(value) {
+    function legacyCopy() {
+      var textarea = document.createElement('textarea');
+      textarea.value = value;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      var ok = false;
+      try {
+        ok = document.execCommand('copy');
+      } catch (e) {
+        ok = false;
+      }
+      textarea.remove();
+      toast(ok ? 'Prompt copiado' : 'No se pudo copiar');
+    }
+    if (global.navigator.clipboard && global.navigator.clipboard.writeText) {
+      global.navigator.clipboard.writeText(value).then(function () {
+        toast('Prompt copiado');
+      }, legacyCopy);
+    } else {
+      legacyCopy();
+    }
   }
 
   // Backend name as shown in toasts and confirmations.
@@ -1589,6 +1725,7 @@
     renderWaiting: renderWaiting,
     renderSomeday: renderSomeday,
     renderHorizons: renderHorizons,
+    renderAI: renderAI,
     renderReference: renderReference,
     renderTrash: renderTrash,
     renderSettings: renderSettings,

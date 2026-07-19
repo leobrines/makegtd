@@ -18,6 +18,7 @@
     '/horizontes': function () { return views.renderHorizons(); },
     '/referencia': function () { return views.renderReference(); },
     '/revision': function () { return global.GTD.review.render(); },
+    '/ia': function () { return views.renderAI(); },
     '/papelera': function () { return views.renderTrash(); },
     '/ajustes': function () { return views.renderSettings(); },
   };
@@ -37,6 +38,7 @@
 
   var NAV_FOOTER = [
     { path: '/revision', icon: '🪞', label: 'Revisión semanal', badge: 'review' },
+    { path: '/ia', icon: '✨', label: 'IA' },
     { path: '/papelera', icon: '🗑️', label: 'Papelera' },
     { path: '/ajustes', icon: '⚙️', label: 'Ajustes' },
   ];
@@ -56,6 +58,7 @@
     { path: '/algundia', icon: '🌙', label: 'Algún día' },
     { path: '/referencia', icon: '📚', label: 'Referencia' },
     { path: '/revision', icon: '🪞', label: 'Revisión semanal', badge: 'review' },
+    { path: '/ia', icon: '✨', label: 'IA' },
     { path: '/papelera', icon: '🗑️', label: 'Papelera' },
     { path: '/ajustes', icon: '⚙️', label: 'Ajustes' },
   ];
