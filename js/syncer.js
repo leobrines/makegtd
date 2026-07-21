@@ -242,7 +242,7 @@
     var last = readLastSyncMap();
     var backends = [];
     if (config && config.server) backends.push({ provider: 'server', serverUrl: config.server.url, lastSyncAt: last.server || null });
-    if (config && config.gdrive) backends.push({ provider: 'gdrive', serverUrl: null, lastSyncAt: last.gdrive || null });
+    if (config && config.gdrive) backends.push({ provider: 'gdrive', serverUrl: null, clientId: config.gdrive.clientId, lastSyncAt: last.gdrive || null });
     return {
       configured: !!config,
       backends: backends,
