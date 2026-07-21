@@ -60,7 +60,11 @@
       schedule: 'when',
       next: 'when',
     };
-    step = step === 'who' ? (pending ? 'project-action' : 'two-minutes') : back[step] || 'actionable';
+    // With Waiting off the wizard never asked "who?": 'when' steps straight
+    // back to where that question would have been.
+    step = step === 'who' || (step === 'when' && !model.waitingEnabled())
+      ? (pending ? 'project-action' : 'two-minutes')
+      : back[step] || 'actionable';
     global.GTD.app.refresh();
   }
 
@@ -109,6 +113,13 @@
 
   function question(text) {
     return '<p class="text-lg font-medium mb-4">' + esc(text) + '</p>';
+  }
+
+  // Step after "takes more than 2 minutes": with the Waiting list off there is
+  // no one to delegate to (workflow map's delegate branch is assumed to live
+  // outside the app), so the wizard skips "who?" and asks about dates directly.
+  function afterTwoMinutes() {
+    return model.waitingEnabled() ? 'who' : 'when';
   }
 
   function backLink() {
@@ -314,8 +325,10 @@
         html +=
           '<form id="pz-schedule-form">' +
           '<input type="date" id="pz-schedule-input" class="field mb-3" min="' + model.todayISO() + '" value="' + model.todayISO() + '" />' +
-          '<label class="block text-sm text-stone-500 dark:text-stone-400 mb-1" for="pz-schedule-time">Hora (opcional)</label>' +
-          '<input type="time" id="pz-schedule-time" class="field mb-3" />' +
+          (model.timeFieldEnabled()
+            ? '<label class="block text-sm text-stone-500 dark:text-stone-400 mb-1" for="pz-schedule-time">Hora (opcional)</label>' +
+              '<input type="time" id="pz-schedule-time" class="field mb-3" />'
+            : '') +
           projectSelect(item) +
           '<button type="submit" class="btn-primary w-full">Programar</button>' +
           (model.gcalEnabled()
@@ -533,11 +546,11 @@
       var title = $('#pz-project-action-input').val().trim();
       if (!title) return;
       pending.actionTitle = title;
-      go('who');
+      go(afterTwoMinutes());
     });
 
     $view.on('click', '[data-action="pz-do-now"]', function () { go('doing-now'); });
-    $view.on('click', '[data-action="pz-more-time"]', function () { go('who'); });
+    $view.on('click', '[data-action="pz-more-time"]', function () { go(afterTwoMinutes()); });
 
     $view.on('click', '[data-action="pz-done"]', function () {
       model.completeItem(itemId);

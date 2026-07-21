@@ -170,7 +170,8 @@
     var date = (item.date || todayISO()).slice(0, 10);
     var parts = date.split('-');
     var dates;
-    if (item.time && /^\d{1,2}:\d{2}$/.test(item.time)) {
+    // With the time field off the whole UI is date-only, so the event is too.
+    if (item.time && timeFieldEnabled() && /^\d{1,2}:\d{2}$/.test(item.time)) {
       var hm = item.time.split(':');
       var start = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), Number(hm[0]), Number(hm[1]));
       var end = new Date(start.getTime() + 60 * 60 * 1000);
@@ -251,6 +252,19 @@
   // Whether the "add to Google Calendar" buttons are shown.
   function gcalEnabled() {
     return store.getSettings().gcalEnabled !== false;
+  }
+
+  // Whether the Waiting For list is on. When off, the nav entry, the view and
+  // the delegate branch of the Clarify wizard disappear; stored waiting items
+  // are kept and still surface in the weekly review, so nothing gets lost.
+  function waitingEnabled() {
+    return store.getSettings().waitingEnabled !== false;
+  }
+
+  // Whether the optional time (HH:MM) field of scheduled items is shown. When
+  // off, editors only ask for the day; stored times are kept.
+  function timeFieldEnabled() {
+    return store.getSettings().timeFieldEnabled !== false;
   }
 
   // Whether the Horizons view (levels 2-5) is on. Higher horizons are worth
@@ -481,6 +495,8 @@
     contextsEnabled: contextsEnabled,
     referenceEnabled: referenceEnabled,
     gcalEnabled: gcalEnabled,
+    waitingEnabled: waitingEnabled,
+    timeFieldEnabled: timeFieldEnabled,
     horizonsEnabled: horizonsEnabled,
     captureShortcutEnabled: captureShortcutEnabled,
     criterionEnabled: criterionEnabled,

@@ -68,20 +68,21 @@
     return hash || '/hoy';
   }
 
-  // Nav entries hidden by a feature toggle (Reference and Horizons are optional).
+  // Nav entries hidden by a feature toggle (Reference, Horizons and Waiting are optional).
   function visibleNav(items) {
     return items.filter(function (item) {
       if (item.path === '/referencia') return model.referenceEnabled();
       if (item.path === '/horizontes') return model.horizonsEnabled();
+      if (item.path === '/espera') return model.waitingEnabled();
       return true;
     });
   }
 
   function badgeHTML(kind) {
-    if (kind === 'inbox') {
-      var count = model.inboxItems().length;
-      if (!count) return '';
-      return '<span class="ml-auto text-xs min-w-[1.4rem] h-[1.4rem] px-1 rounded-full bg-accent text-white inline-flex items-center justify-center">' + count + '</span>';
+    // A discreet dot, never a count: numbers read as pressure, the dot just
+    // says "there is something here".
+    if (kind === 'inbox' && model.inboxItems().length) {
+      return '<span class="ml-auto w-2 h-2 rounded-full bg-accent inline-block" aria-label="Pendiente"></span>';
     }
     if (kind === 'review' && model.reviewIsDue()) {
       return '<span class="ml-auto w-2 h-2 rounded-full bg-accent inline-block" aria-label="Pendiente"></span>';
@@ -127,11 +128,8 @@
     NAV_MOBILE.forEach(function (item) {
       var active = path === item.path || (item.path === '/proyectos' && path.indexOf('/proyectos/') === 0);
       var badge = '';
-      if (item.badge === 'inbox') {
-        var count = model.inboxItems().length;
-        if (count) {
-          badge = '<span class="absolute top-1 right-1/2 translate-x-4 text-[10px] min-w-[1.1rem] h-[1.1rem] px-0.5 rounded-full bg-accent text-white inline-flex items-center justify-center">' + count + '</span>';
-        }
+      if (item.badge === 'inbox' && model.inboxItems().length) {
+        badge = '<span class="absolute top-1.5 right-1/2 translate-x-3 w-1.5 h-1.5 rounded-full bg-accent" aria-label="Pendiente"></span>';
       }
       html +=
         '<a href="#' + item.path + '" class="relative flex-1 flex flex-col items-center justify-center gap-0.5 min-h-[56px] text-[11px] ' +
@@ -181,6 +179,7 @@
     var renderer = ROUTES[path];
     if (path === '/referencia' && !model.referenceEnabled()) renderer = null;
     if (path === '/horizontes' && !model.horizonsEnabled()) renderer = null;
+    if (path === '/espera' && !model.waitingEnabled()) renderer = null;
     if (!renderer && path.indexOf('/proyectos/') === 0) {
       var projectId = path.slice('/proyectos/'.length);
       renderer = function () { return views.renderProjectDetail(projectId); };
