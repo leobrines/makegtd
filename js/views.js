@@ -908,6 +908,15 @@
             'Si tu proyecto de Google sigue en modo «Testing», te pedirá autorizar de nuevo cada 7 días; ' +
             'publícalo en producción para evitarlo.' +
             '</p>';
+          // The Client ID is not a secret (it travels in the OAuth URL);
+          // showing it here saves the trip to the Google console when
+          // connecting another device — only the passphrase must be retyped.
+          html +=
+            '<p class="text-xs text-stone-400 dark:text-stone-500">' +
+            'Para conectar otro dispositivo usa este mismo ID de cliente (y tu frase de cifrado): ' +
+            '<code class="break-all">' + esc(b.clientId || '') + '</code> ' +
+            '<button type="button" class="btn-ghost" data-action="copy-value" data-value="' + esc(b.clientId || '') + '">Copiar</button>' +
+            '</p>';
         } else {
           html +=
             '<p class="text-sm text-stone-500 dark:text-stone-400">Conectado a tu servidor ' +
