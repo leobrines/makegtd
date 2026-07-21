@@ -196,6 +196,9 @@
       }
 
       case 'waiting': {
+        // The step stays even with the in-app Waiting list off (the official
+        // checklist keeps it), and it lists stored waiting items regardless of
+        // the toggle so hidden delegations still resurface weekly.
         var waiting = model.waitingItems();
         html += stepTitle('Repasa lo que está en espera');
         html += stepHint('¿Alguien te debe una respuesta? Marca lo recibido y anota los recordatorios que toquen.');

@@ -82,7 +82,7 @@
       var overdue = item.date < model.todayISO();
       bits.push(
         '<span class="' + (overdue ? 'text-red-600 dark:text-red-400' : '') + '">' +
-        esc(model.formatDate(item.date)) + (item.time ? ' · ' + esc(item.time) : '') + '</span>'
+        esc(model.formatDate(item.date)) + (item.time && model.timeFieldEnabled() ? ' · ' + esc(item.time) : '') + '</span>'
       );
     }
     if (item.status === model.STATUS.WAITING && item.waitingFor) {
@@ -168,8 +168,9 @@
     var order = ['next', 'scheduled', 'waiting', 'someday', 'reference', 'inbox'];
     var html = '';
     order.forEach(function (s) {
-      // Reference disabled: hide the option unless the item already is one.
+      // Reference/Waiting disabled: hide the option unless the item already is one.
       if (s === 'reference' && s !== selected && !model.referenceEnabled()) return;
+      if (s === 'waiting' && s !== selected && !model.waitingEnabled()) return;
       html += '<option value="' + s + '"' + (s === selected ? ' selected' : '') + '>' +
         esc(model.STATUS_LABELS[s]) + '</option>';
     });
@@ -205,7 +206,9 @@
         : '') +
       '<select class="field" data-field="projectId" aria-label="Proyecto">' + projectOptions(item.projectId) + '</select>' +
       '<input type="date" class="field" data-field="date" value="' + esc(item.date || '') + '" aria-label="Fecha" />' +
-      '<input type="time" class="field" data-field="time" value="' + esc(item.time || '') + '" aria-label="Hora (opcional)" />' +
+      (model.timeFieldEnabled()
+        ? '<input type="time" class="field" data-field="time" value="' + esc(item.time || '') + '" aria-label="Hora (opcional)" />'
+        : '') +
       criterionSelect('estimate', 'Tiempo estimado', 'Sin tiempo estimado', model.timeEstimates(), item.estimate) +
       criterionSelect('energy', 'Nivel de energía', 'Sin nivel de energía', model.energyLevels(), item.energy) +
       criterionSelect('priority', 'Prioridad', 'Sin prioridad', model.priorities(), item.priority) +
@@ -861,6 +864,12 @@
       model.referenceEnabled()
     );
     html += toggleRow(
+      'waiting-enabled-toggle',
+      'Lista «A la espera»',
+      'Si la desactivas, desaparecen la lista y la opción de delegar al procesar. Lo guardado se conserva y sigue apareciendo en la revisión semanal.',
+      model.waitingEnabled()
+    );
+    html += toggleRow(
       'horizons-enabled-toggle',
       'Horizontes',
       'La perspectiva por encima de tus proyectos (áreas, metas, visión, propósito). Si aún no la usas, ocúltala; lo guardado se conserva.',
@@ -871,6 +880,12 @@
       'Botones de Google Calendar',
       'Muestra u oculta los botones para añadir tareas con fecha a Google Calendar.',
       model.gcalEnabled()
+    );
+    html += toggleRow(
+      'time-field-enabled-toggle',
+      'Campo de hora',
+      'Si lo desactivas, las tareas con fecha solo piden el día. Las horas guardadas se conservan.',
+      model.timeFieldEnabled()
     );
     html += toggleRow(
       'capture-shortcut-toggle',
@@ -1307,15 +1322,16 @@
         status: $editor.find('[data-field="status"]').val(),
         projectId: $editor.find('[data-field="projectId"]').val() || null,
         date: $editor.find('[data-field="date"]').val() || null,
-        time: $editor.find('[data-field="time"]').val() || null,
         waitingFor: $editor.find('[data-field="waitingFor"]').val() || null,
       };
       // The context select is absent while contexts are disabled; skip the
       // field so stored contexts survive a temporary toggle-off. Same for the
-      // Engage criteria selects, absent while the criterion is off or its
-      // value list is empty.
+      // time input and the Engage criteria selects, absent while their
+      // feature is off (or the criterion's value list is empty).
       var $context = $editor.find('[data-field="context"]');
       if ($context.length) fields.context = $context.val() || null;
+      var $time = $editor.find('[data-field="time"]');
+      if ($time.length) fields.time = $time.val() || null;
       ['estimate', 'energy', 'priority'].forEach(function (field) {
         var $select = $editor.find('[data-field="' + field + '"]');
         if ($select.length) fields[field] = $select.val() || null;
@@ -1597,6 +1613,18 @@
     $view.on('change', '#reference-enabled-toggle', function () {
       store.updateSettings({ referenceEnabled: this.checked });
       toast(this.checked ? 'Lista de referencia activada' : 'Lista de referencia desactivada');
+      refresh();
+    });
+
+    $view.on('change', '#waiting-enabled-toggle', function () {
+      store.updateSettings({ waitingEnabled: this.checked });
+      toast(this.checked ? 'Lista «A la espera» activada' : 'Lista «A la espera» desactivada');
+      refresh();
+    });
+
+    $view.on('change', '#time-field-enabled-toggle', function () {
+      store.updateSettings({ timeFieldEnabled: this.checked });
+      toast(this.checked ? 'Campo de hora activado' : 'Campo de hora desactivado');
       refresh();
     });
 
