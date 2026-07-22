@@ -520,6 +520,22 @@
       </div>
     </div>
 
+    <!-- Sync setup wizard: step-by-step modal that connects a backup destination
+         (Google Drive or a self-hosted server), opened from Settings. The steps
+         are rendered one at a time by js/views.js; this shell only provides the
+         overlay and the dialog box. -->
+    <div id="sync-wizard-overlay" class="fixed inset-0 z-50 hidden overflow-y-auto bg-stone-900/40 dark:bg-black/60" aria-hidden="true">
+      <div class="max-w-lg mx-auto mt-[8vh] mb-8 px-4">
+        <div
+          id="sync-wizard"
+          class="relative bg-white dark:bg-stone-900 rounded-2xl p-5 border border-stone-200 dark:border-stone-700"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="sync-wizard-title"
+        ></div>
+      </div>
+    </div>
+
     <!-- Transient confirmation toast -->
     <div
       id="toast"
