@@ -493,6 +493,20 @@
       </div>
     </div>
 
+    <!-- "Ordenar por" menu for task lists. Options depend on the list and on
+         which criteria are enabled; the body is rendered by js/views.js. -->
+    <div id="sort-overlay" class="fixed inset-0 z-50 hidden bg-stone-900/40 dark:bg-black/60" aria-hidden="true">
+      <div class="max-w-sm mx-auto mt-[24vh] px-4">
+        <div
+          id="sort-panel"
+          class="bg-white dark:bg-stone-900 rounded-2xl p-4 border border-stone-200 dark:border-stone-700"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Ordenar por"
+        ></div>
+      </div>
+    </div>
+
     <!-- Transient confirmation toast -->
     <div
       id="toast"

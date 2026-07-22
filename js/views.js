@@ -248,6 +248,77 @@
     return '<ul>' + items.map(function (item) { return itemRow(item, options); }).join('') + '</ul>';
   }
 
+  // ---- "Ordenar por" (Google Tasks-style sort menu) ----
+
+  // Which list the sort dialog is open for (null when closed).
+  var sortMenuFor = null;
+
+  // Options available right now for one list. Criterion entries only exist
+  // while their feature is enabled in Settings and has values (the model
+  // accessors return [] otherwise); "Fecha" only where items can carry dates.
+  function sortOptions(hasDates) {
+    var options = [{ key: 'my-order', label: 'Mi orden' }];
+    if (hasDates) options.push({ key: 'date', label: 'Fecha' });
+    if (model.priorities().length) options.push({ key: 'priority', label: 'Prioridad' });
+    if (model.timeEstimates().length) options.push({ key: 'estimate', label: 'Tiempo estimado' });
+    if (model.energyLevels().length) options.push({ key: 'energy', label: 'Nivel de energía' });
+    options.push({ key: 'title', label: 'Título' });
+    return options;
+  }
+
+  // The stored preference, unless it points to an option no longer offered
+  // (its criterion was disabled or emptied): then fall back to "Mi orden".
+  function activeSort(listKey, hasDates) {
+    var pref = model.sortPref(listKey);
+    var valid = sortOptions(hasDates).some(function (o) { return o.key === pref; });
+    return valid ? pref : 'my-order';
+  }
+
+  function sortedItems(items, listKey, hasDates) {
+    return model.sortItems(items, activeSort(listKey, hasDates));
+  }
+
+  // Discreet right-aligned trigger above a list; pointless for lists of one.
+  function sortButton(listKey, hasDates, count) {
+    if (count < 2) return '';
+    var current = activeSort(listKey, hasDates);
+    var label = 'Ordenar';
+    sortOptions(hasDates).forEach(function (o) {
+      if (o.key === current && current !== 'my-order') label = o.label;
+    });
+    return (
+      '<div class="flex justify-end">' +
+      '<button type="button" class="btn-ghost text-sm' + (current !== 'my-order' ? ' text-accent dark:text-accent' : '') + '" ' +
+      'data-action="open-sort" data-list-key="' + listKey + '" data-has-dates="' + (hasDates ? '1' : '') + '" ' +
+      'aria-haspopup="dialog" aria-label="Ordenar por">' +
+      '<span aria-hidden="true" class="mr-1.5">↕</span>' + esc(label) +
+      '</button>' +
+      '</div>'
+    );
+  }
+
+  function openSortMenu(listKey, hasDates) {
+    sortMenuFor = { listKey: listKey, hasDates: hasDates };
+    var current = activeSort(listKey, hasDates);
+    var html = '<h2 class="font-semibold text-lg tracking-tight mb-2 px-1">Ordenar por</h2>';
+    sortOptions(hasDates).forEach(function (o) {
+      var active = o.key === current;
+      html +=
+        '<button type="button" class="w-full min-h-[48px] px-1 flex items-center gap-3 text-left rounded-xl hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors duration-150" ' +
+        'data-action="choose-sort" data-sort="' + o.key + '"' + (active ? ' aria-pressed="true"' : '') + '>' +
+        '<span class="w-5 text-accent" aria-hidden="true">' + (active ? '✓' : '') + '</span>' +
+        '<span' + (active ? ' class="font-medium"' : '') + '>' + esc(o.label) + '</span>' +
+        '</button>';
+    });
+    $('#sort-panel').html(html);
+    $('#sort-overlay').removeClass('hidden').attr('aria-hidden', 'false');
+  }
+
+  function closeSortMenu() {
+    sortMenuFor = null;
+    $('#sort-overlay').addClass('hidden').attr('aria-hidden', 'true');
+  }
+
   // ---- Views ----
 
   function renderToday() {
@@ -362,7 +433,8 @@
       : items;
 
     if (visible.length) {
-      html += list(visible);
+      html += sortButton('next', false, visible.length);
+      html += list(sortedItems(visible, 'next', false));
     } else if (items.length) {
       html += emptyState('🔍', 'No hay acciones en este contexto.');
     } else {
@@ -450,8 +522,14 @@
       '</div>' +
       '</form>';
 
-    if (open.length) html += list(open);
-    else html += emptyState('✨', 'Nada pendiente en este proyecto.');
+    // Project steps can mix dated (scheduled) and undated actions, so this
+    // list also offers sorting by date; the preference is shared by all projects.
+    if (open.length) {
+      html += sortButton('project', true, open.length);
+      html += list(sortedItems(open, 'project', true));
+    } else {
+      html += emptyState('✨', 'Nada pendiente en este proyecto.');
+    }
 
     // Project support material (workflow map): reference items filed under this project.
     if (support.length) {
@@ -511,7 +589,8 @@
     var items = model.waitingItems();
     var html = header('A la espera', 'Cosas delegadas o pendientes de otras personas.');
     if (!items.length) return html + emptyState('📮', 'No esperas nada de nadie ahora mismo.');
-    html += list(items);
+    html += sortButton('waiting', false, items.length);
+    html += list(sortedItems(items, 'waiting', false));
     return html;
   }
 
@@ -523,7 +602,8 @@
       return html + emptyState('🌙', 'Nada incubando. Las ideas nuevas pueden esperar aquí.');
     }
     if (items.length) {
-      html += '<ul>' + items.map(function (item) {
+      html += sortButton('someday', false, items.length);
+      html += '<ul>' + sortedItems(items, 'someday', false).map(function (item) {
         return itemRow(item, {
           trailing:
             '<button type="button" class="btn-ghost text-accent shrink-0" data-action="activate" data-id="' + item.id + '">Activar</button>',
@@ -697,7 +777,8 @@
     var items = model.referenceItems();
     var html = header('Referencia', 'Material útil que no requiere acción.');
     if (!items.length) return html + emptyState('📚', 'Sin material de referencia todavía.');
-    html += list(items);
+    html += sortButton('reference', false, items.length);
+    html += list(sortedItems(items, 'reference', false));
     return html;
   }
 
@@ -1275,6 +1356,26 @@
     $view.on('click', '[data-action="filter-context"]', function () {
       currentContextFilter = $(this).data('context') || '';
       refresh();
+    });
+
+    // "Ordenar por" menu.
+    $view.on('click', '[data-action="open-sort"]', function () {
+      openSortMenu($(this).data('list-key'), !!$(this).data('has-dates'));
+    });
+
+    $('#sort-panel').on('click', '[data-action="choose-sort"]', function () {
+      if (!sortMenuFor) return;
+      model.setSortPref(sortMenuFor.listKey, $(this).data('sort'));
+      closeSortMenu();
+      refresh();
+    });
+
+    $('#sort-overlay').on('click', function (e) {
+      if (e.target === this) closeSortMenu();
+    });
+
+    $(document).on('keydown', function (e) {
+      if (e.key === 'Escape') closeSortMenu();
     });
 
     // Help popup: what a "context" is (triggers live in Settings and the Clarify wizard).
@@ -1867,6 +1968,7 @@
     collapseEditor: function () {
       expandedItemId = null;
       closeHorizonEditor();
+      closeSortMenu();
     },
   };
 })(window, jQuery);
