@@ -2,6 +2,21 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
+  <!--
+    Content Security Policy: the app is fully self-contained, so scripts, styles,
+    workers and the manifest are locked to same-origin. 'unsafe-inline' is kept
+    only for style attributes (no inline <script> or on* handlers exist, so
+    script injection cannot execute — a synced item title reaches .html() only
+    through esc()). connect-src allows https (Google Drive and any self-hosted
+    sync server the user configures) plus http loopback for local dev servers.
+    Clickjacking protection (frame-ancestors) needs an HTTP header; a static
+    host should also send it.
+  -->
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; manifest-src 'self'; worker-src 'self'; frame-src 'none'; form-action 'self'; connect-src 'self' https: http://localhost:* http://127.0.0.1:*"
+  />
+  <meta name="referrer" content="no-referrer" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="description" content="makeGTD — tu sistema GTD completo, simple y sin distracciones." />
   <meta name="theme-color" content="#fafaf9" media="(prefers-color-scheme: light)" />
