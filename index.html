@@ -479,6 +479,30 @@
       </div>
     </div>
 
+    <!-- Device unlock gate (shown at boot when encryption at rest is on) -->
+    <div id="unlock-overlay" class="fixed inset-0 z-[60] hidden bg-stone-50 dark:bg-stone-950" aria-hidden="true">
+      <div class="max-w-md mx-auto mt-[16vh] px-4">
+        <div class="bg-white dark:bg-stone-900 rounded-2xl p-5 border border-stone-200 dark:border-stone-700 space-y-4">
+          <div class="flex items-center gap-2">
+            <span class="w-7 h-7 rounded-lg bg-accent text-white text-sm font-bold flex items-center justify-center" aria-hidden="true">🔒</span>
+            <span class="font-semibold tracking-tight">makeGTD está protegido</span>
+          </div>
+          <p class="text-sm text-stone-500 dark:text-stone-400">
+            Tus datos están cifrados en este dispositivo. Desbloquéalos para continuar.
+          </p>
+          <button type="button" id="unlock-biometric" class="btn-primary w-full hidden">Desbloquear con biometría</button>
+          <form id="unlock-recovery-form" class="space-y-2">
+            <label class="block">
+              <span class="block text-sm text-stone-500 dark:text-stone-400">Código de recuperación</span>
+              <input type="password" id="unlock-recovery-input" class="field mt-1 w-full" autocomplete="off" autocapitalize="off" spellcheck="false" />
+            </label>
+            <button type="submit" class="btn-secondary w-full">Desbloquear con código</button>
+          </form>
+          <p id="unlock-error" class="text-sm text-red-500 dark:text-red-400 hidden" role="alert"></p>
+        </div>
+      </div>
+    </div>
+
     <!-- Transient confirmation toast -->
     <div
       id="toast"
@@ -492,6 +516,7 @@
   <script src="js/store.js"></script>
   <script src="js/sync.js"></script>
   <script src="js/crypto.js"></script>
+  <script src="js/vault.js"></script>
   <script src="js/syncer.js"></script>
   <script src="js/drive.js"></script>
   <script src="js/server.js"></script>

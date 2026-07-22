@@ -104,6 +104,32 @@
   var db = null; // Open IndexedDB handle; null means localStorage-fallback mode.
   var initPromise = null;
 
+  // Encryption at rest (js/vault.js). When a vault is enrolled the persisted
+  // record is an opaque envelope instead of the plaintext document; init()
+  // then enters a locked state and the app must call unlockWith(key) with the
+  // data key the vault releases after biometric/recovery. Devices without a
+  // vault keep the original plaintext path untouched.
+  var locked = false;
+  var pendingRecord = null; // Encrypted record awaiting unlockWith().
+  var writeChain = Promise.resolve(); // Serializes async encrypted writes.
+
+  function vault() {
+    return global.GTD && global.GTD.vault;
+  }
+
+  function encryptionOn() {
+    var v = vault();
+    return !!(v && v.isEnrolled());
+  }
+
+  function encRecordFrom(envelope, savedAt) {
+    return { __enc: 1, v: 1, envelope: envelope, savedAt: savedAt };
+  }
+
+  function isEncryptedRecord(record) {
+    return !!(record && record.__enc === 1 && typeof record.envelope === 'string');
+  }
+
   // ---- Boot / persistence plumbing ----
 
   function init() {
@@ -122,7 +148,15 @@
         // The legacy/localStorage copy wins only when it is strictly newer
         // (savedAt), i.e. after a fallback write; otherwise IndexedDB rules.
         var legacy = readLegacy();
-        state = migrate(pickNewer(record, legacy));
+        var chosen = pickNewer(record, legacy);
+        // Encrypted at rest: hold the envelope and wait for unlockWith(key).
+        // Nothing readable is put in memory until the data key arrives.
+        if (isEncryptedRecord(chosen)) {
+          pendingRecord = chosen;
+          locked = true;
+          return null;
+        }
+        state = migrate(chosen);
         save(); // Persist the migrated document so storage is current from boot.
         return state;
       });
@@ -187,22 +221,49 @@
   // order, and put() clones the value synchronously, so the last save() always
   // wins on disk with no awaiting needed.
   function persist() {
+    if (encryptionOn()) {
+      var key = vault().getKey();
+      // Enrolled but still locked (no data key): never fall back to writing the
+      // document in the clear. The in-memory state survives the session; the
+      // next save() after unlock persists it encrypted.
+      if (!key) return;
+      var snapshot = JSON.stringify(state);
+      var savedAt = state.savedAt;
+      writeChain = writeChain
+        .then(function () {
+          return vault()
+            .wrapString(key, snapshot)
+            .then(function (envelope) {
+              writeRecord(encRecordFrom(envelope, savedAt));
+            });
+        })
+        .catch(function () {}); // A failed encrypted write must not break the chain.
+      return;
+    }
+    writeRecord(state); // Plaintext path (unchanged for un-enrolled devices).
+  }
+
+  // Writes any record value (plaintext state or encrypted envelope) to
+  // IndexedDB, falling back to localStorage.
+  function writeRecord(value) {
     if (db) {
       try {
         var tx = db.transaction(DB_STORE, 'readwrite');
-        tx.objectStore(DB_STORE).put(state, DB_KEY);
-        tx.onabort = persistToLocalStorage; // e.g. quota exceeded mid-commit.
+        tx.objectStore(DB_STORE).put(value, DB_KEY);
+        tx.onabort = function () {
+          writeRecordToLocalStorage(value); // e.g. quota exceeded mid-commit.
+        };
         return;
       } catch (err) {
         // Fall through to localStorage so the change is not lost.
       }
     }
-    persistToLocalStorage();
+    writeRecordToLocalStorage(value);
   }
 
-  function persistToLocalStorage() {
+  function writeRecordToLocalStorage(value) {
     try {
-      global.localStorage.setItem(LEGACY_KEY, JSON.stringify(state));
+      global.localStorage.setItem(LEGACY_KEY, JSON.stringify(value));
     } catch (ignored) {
       // Nowhere left to write; the in-memory state still works this session.
     }
@@ -678,6 +739,61 @@
     return state;
   }
 
+  // ---- Encryption at rest (js/vault.js) ----
+
+  // True when init() found an encrypted record it could not read yet; the app
+  // must run the unlock gate and call unlockWith(key) before using the store.
+  function isLocked() {
+    return locked;
+  }
+
+  function isEncrypted() {
+    return encryptionOn();
+  }
+
+  // Decrypts the pending record with the vault's data key and brings the state
+  // into memory. Rejects (leaving the store locked) if the key does not match.
+  function unlockWith(key) {
+    if (!locked || !pendingRecord) return Promise.resolve(state);
+    return vault()
+      .unwrapString(key, pendingRecord.envelope)
+      .then(function (json) {
+        state = migrate(JSON.parse(json));
+        locked = false;
+        pendingRecord = null;
+        save(); // Re-persist (encrypted) so storage is current from boot.
+        return state;
+      });
+  }
+
+  // Turns encryption on for an already-loaded plaintext state: persist it
+  // encrypted and overwrite every plaintext copy on disk (IndexedDB AND the
+  // localStorage fallback) so nothing readable is left behind.
+  function enableEncryption(key) {
+    load().savedAt = new Date().toISOString();
+    var snapshot = JSON.stringify(load());
+    var savedAt = load().savedAt;
+    return vault()
+      .wrapString(key, snapshot)
+      .then(function (envelope) {
+        var record = encRecordFrom(envelope, savedAt);
+        writeRecord(record);
+        writeRecordToLocalStorage(record); // Wipe any plaintext fallback copy.
+        locked = false;
+        return true;
+      });
+  }
+
+  // Turns encryption off. The caller removes the vault record first (so
+  // encryptionOn() is already false); this writes the document back in the
+  // clear to both stores.
+  function disableEncryption() {
+    load().savedAt = new Date().toISOString();
+    writeRecord(state);
+    writeRecordToLocalStorage(state);
+    return true;
+  }
+
   global.GTD = global.GTD || {};
   global.GTD.store = {
     init: init,
@@ -716,5 +832,10 @@
     importJSON: importJSON,
     clearAll: clearAll,
     replaceState: replaceState,
+    isLocked: isLocked,
+    isEncrypted: isEncrypted,
+    unlockWith: unlockWith,
+    enableEncryption: enableEncryption,
+    disableEncryption: disableEncryption,
   };
 })(window);

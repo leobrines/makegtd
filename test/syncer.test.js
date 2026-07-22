@@ -27,11 +27,36 @@ test('normalizeServerUrl canonicalizes what users type', function () {
   assert.strictEqual(pure.normalizeServerUrl('sync.example.com'), 'https://sync.example.com');
   assert.strictEqual(pure.normalizeServerUrl(' https://sync.example.com/ '), 'https://sync.example.com');
   assert.strictEqual(pure.normalizeServerUrl('http://localhost:8787'), 'http://localhost:8787');
+  assert.strictEqual(pure.normalizeServerUrl('http://127.0.0.1:8787'), 'http://127.0.0.1:8787');
+  assert.strictEqual(pure.normalizeServerUrl('http://dev.localhost'), 'http://dev.localhost');
   assert.strictEqual(pure.normalizeServerUrl('https://host.tld/base/path/'), 'https://host.tld/base/path');
   assert.strictEqual(pure.normalizeServerUrl('https://host.tld/?q=1'), null);
   assert.strictEqual(pure.normalizeServerUrl('ftp://host.tld'), null);
   assert.strictEqual(pure.normalizeServerUrl(''), null);
   assert.strictEqual(pure.normalizeServerUrl('   '), null);
+});
+
+test('normalizeServerUrl forces https off loopback (no downgrade)', function () {
+  // Plain http to a public host is rejected: a downgraded transport would
+  // defeat end-to-end encryption.
+  assert.strictEqual(pure.normalizeServerUrl('http://sync.example.com'), null);
+  assert.strictEqual(pure.normalizeServerUrl('http://192.168.1.10:8787'), null);
+  assert.strictEqual(pure.isLocalHost('localhost'), true);
+  assert.strictEqual(pure.isLocalHost('127.0.0.1'), true);
+  assert.strictEqual(pure.isLocalHost('::1'), true);
+  assert.strictEqual(pure.isLocalHost('sync.example.com'), false);
+});
+
+test('isStaleDoc guards against rollback while allowing progress', function () {
+  var hwm = { 'gtd-device-a.json': '2026-07-20T10:00:00.000Z' };
+  // Older than the high-water for that file -> stale (rollback/replay).
+  assert.strictEqual(pure.isStaleDoc('gtd-device-a.json', '2026-07-19T10:00:00.000Z', hwm), true);
+  // Same or newer -> accepted.
+  assert.strictEqual(pure.isStaleDoc('gtd-device-a.json', '2026-07-20T10:00:00.000Z', hwm), false);
+  assert.strictEqual(pure.isStaleDoc('gtd-device-a.json', '2026-07-21T10:00:00.000Z', hwm), false);
+  // A file we have never seen, or a doc without a timestamp, is accepted.
+  assert.strictEqual(pure.isStaleDoc('gtd-device-b.json', '2026-01-01T00:00:00.000Z', hwm), false);
+  assert.strictEqual(pure.isStaleDoc('gtd-device-a.json', null, hwm), false);
 });
 
 test('normalizeConfig accepts single-backend shapes', function () {

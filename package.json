@@ -6,7 +6,7 @@
   "scripts": {
     "build:css": "tailwindcss -i src/input.css -o css/styles.css --minify",
     "watch:css": "tailwindcss -i src/input.css -o css/styles.css --watch",
-    "test": "node test/sync.test.js && node test/crypto.test.js && node test/drive.test.js && node test/syncer.test.js && node test/server.test.js"
+    "test": "node test/sync.test.js && node test/crypto.test.js && node test/vault.test.js && node test/drive.test.js && node test/syncer.test.js && node test/server.test.js"
   },
   "devDependencies": {
     "tailwindcss": "^3.4.17"

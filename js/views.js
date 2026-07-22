@@ -26,6 +26,18 @@
     global.GTD.app.refresh();
   }
 
+  // A strong random phrase (~79 bits; confusable characters excluded), used for
+  // the sync passphrase and the device-vault recovery code.
+  function randomPassphrase() {
+    var alphabet = 'abcdefghjkmnpqrstuvwxyz23456789';
+    var bytes = global.crypto.getRandomValues(new Uint8Array(16));
+    return Array.prototype.map
+      .call(bytes, function (b, i) {
+        return alphabet[b % alphabet.length] + (i % 4 === 3 && i < 15 ? '-' : '');
+      })
+      .join('');
+  }
+
   function toast(message) {
     global.GTD.app.toast(message);
   }
@@ -883,6 +895,46 @@
     );
     html += '</div>';
 
+    html += sectionTitle('Seguridad del dispositivo');
+    html += '<div class="card px-4 py-4 space-y-3">';
+    var vault = global.GTD.vault;
+    if (!vault || !vault.available()) {
+      html +=
+        '<p class="text-sm text-stone-500 dark:text-stone-400">' +
+        'Este navegador no admite el cifrado en reposo. Usa un navegador moderno para proteger tus datos.' +
+        '</p>';
+    } else if (!vault.isEnrolled()) {
+      html +=
+        '<p class="text-sm text-stone-500 dark:text-stone-400">' +
+        'Cifra <strong>todos</strong> tus datos en este dispositivo (tareas, proyectos y las claves de ' +
+        'sincronización) con una clave que solo se libera tras tu huella o Face ID. Sin activarlo, tus ' +
+        'datos se guardan sin cifrar y podrían leerse si pierdes el dispositivo o desde otra app.' +
+        '</p>';
+      html +=
+        '<p class="text-xs text-stone-400 dark:text-stone-500">' +
+        'Al activarlo se genera un <strong>código de recuperación</strong>: guárdalo en tu gestor de ' +
+        'contraseñas. Es la única forma de recuperar tus datos si pierdes o restableces la biometría ' +
+        '(también puedes exportar una copia sin cifrar en «Tus datos»).' +
+        '</p>';
+      html += '<button type="button" class="btn-primary" data-action="vault-enroll">Activar protección del dispositivo</button>';
+    } else {
+      html +=
+        '<p class="text-sm text-stone-500 dark:text-stone-400">' +
+        'Protección activada: tus datos se cifran en este dispositivo. ' +
+        (vault.hasBiometric()
+          ? 'Se desbloquea con tu biometría (o con el código de recuperación).'
+          : 'Se desbloquea con tu código de recuperación.') +
+        '</p>';
+      html += '<div class="flex flex-wrap gap-2">';
+      if (!vault.hasBiometric()) {
+        html += '<button type="button" class="btn-secondary" data-action="vault-add-biometric">Añadir desbloqueo por biometría</button>';
+      }
+      html += '<button type="button" class="btn-secondary" data-action="vault-change-recovery">Cambiar código de recuperación</button>';
+      html += '<button type="button" class="btn-ghost text-red-500 dark:text-red-400" data-action="vault-disable">Desactivar protección…</button>';
+      html += '</div>';
+    }
+    html += '</div>';
+
     html += sectionTitle('Sincronización entre dispositivos');
     html += '<div class="card px-4 py-4 space-y-3">';
     var syncStatus = global.GTD.syncer.status();
@@ -1525,6 +1577,82 @@
       refresh();
     });
 
+    // ---- Device vault (encryption at rest, via GTD.vault) ----
+
+    // Turns on encryption at rest. Biometric registration is attempted inside
+    // the click gesture (WebAuthn needs it); if it is unsupported or declined
+    // the vault falls back to recovery-code-only, which still encrypts data.
+    $view.on('click', '[data-action="vault-enroll"]', function () {
+      var vault = global.GTD.vault;
+      if (!vault || !vault.available()) return;
+      var code = randomPassphrase();
+      vault
+        .enroll({ recoveryCode: code, useBiometric: true })
+        .then(function (res) {
+          return store
+            .enableEncryption(res.key)
+            .then(function () {
+              return global.GTD.syncer.loadConfig();
+            })
+            .then(function () {
+              return res;
+            });
+        })
+        .then(function (res) {
+          global.alert(
+            'PROTECCIÓN ACTIVADA\n\nTu código de recuperación es:\n\n' +
+              code +
+              '\n\nGuárdalo ahora en tu gestor de contraseñas. Es la única forma de ' +
+              'recuperar tus datos si pierdes la biometría.'
+          );
+          toast(res.biometric ? 'Protección activada con biometría 🔒' : 'Protección activada 🔒');
+          refresh();
+        })
+        .catch(function () {
+          toast('No se pudo activar la protección');
+        });
+    });
+
+    $view.on('click', '[data-action="vault-add-biometric"]', function () {
+      var code = global.prompt('Escribe tu código de recuperación para añadir la biometría:');
+      if (!code) return;
+      global.GTD.vault
+        .addBiometric(code)
+        .then(function () {
+          toast('Biometría añadida 🔒');
+          refresh();
+        })
+        .catch(function (err) {
+          toast(err && err.message === 'unlock-failed' ? 'Código incorrecto' : 'No se pudo añadir la biometría');
+        });
+    });
+
+    $view.on('click', '[data-action="vault-change-recovery"]', function () {
+      var current = global.prompt('Código de recuperación actual:');
+      if (!current) return;
+      var next = randomPassphrase();
+      global.GTD.vault
+        .changeRecovery(current, next)
+        .then(function () {
+          global.alert('NUEVO código de recuperación:\n\n' + next + '\n\nGuárdalo; el anterior ya no sirve.');
+          toast('Código actualizado');
+        })
+        .catch(function (err) {
+          toast(err && err.message === 'unlock-failed' ? 'Código actual incorrecto' : 'No se pudo cambiar el código');
+        });
+    });
+
+    $view.on('click', '[data-action="vault-disable"]', function () {
+      if (!global.confirm('¿Desactivar la protección? Tus datos quedarán sin cifrar en este dispositivo.')) return;
+      // Move the sync config back to plaintext while the vault is still enrolled,
+      // then remove the vault and re-persist the document in the clear.
+      global.GTD.syncer.prepareDisableEncryption();
+      global.GTD.vault.disable();
+      store.disableEncryption();
+      toast('Protección desactivada');
+      refresh();
+    });
+
     // ---- Sync (provider-agnostic, via GTD.syncer) ----
 
     function syncNow() {
@@ -1662,14 +1790,7 @@
     // Fills the field with a strong random phrase (~79 bits; confusable
     // characters excluded) and reveals it so the user can write it down.
     $view.on('click', '[data-action="sync-generate-passphrase"]', function () {
-      var alphabet = 'abcdefghjkmnpqrstuvwxyz23456789';
-      var bytes = global.crypto.getRandomValues(new Uint8Array(16));
-      var phrase = Array.prototype.map
-        .call(bytes, function (b, i) {
-          return alphabet[b % alphabet.length] + (i % 4 === 3 && i < 15 ? '-' : '');
-        })
-        .join('');
-      $('#sync-passphrase').attr('type', 'text').val(phrase);
+      $('#sync-passphrase').attr('type', 'text').val(randomPassphrase());
       $view.find('[data-action="toggle-passphrase"]').text('Ocultar').attr('aria-pressed', 'true');
       toast('Frase generada: guárdala antes de continuar');
     });
