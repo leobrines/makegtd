@@ -148,85 +148,237 @@
     );
   }
 
-  function contextOptions(selected) {
-    var html = '<option value="">Sin contexto</option>';
-    store.getContexts().forEach(function (c) {
-      html += '<option value="' + esc(c) + '"' + (c === selected ? ' selected' : '') + '>' + esc(c) + '</option>';
-    });
-    return html;
-  }
-
-  function projectOptions(selected) {
-    var html = '<option value="">Sin proyecto</option>';
-    model.activeProjects().forEach(function (p) {
-      html += '<option value="' + p.id + '"' + (p.id === selected ? ' selected' : '') + '>' + esc(p.name) + '</option>';
-    });
-    return html;
-  }
-
-  function statusOptions(selected) {
+  // Status choices for the editor's "Lista" dialog. Reference/Waiting
+  // disabled in Settings: hide the choice unless the item already is one.
+  function statusChoices(current) {
     var order = ['next', 'scheduled', 'waiting', 'someday', 'reference', 'inbox'];
-    var html = '';
-    order.forEach(function (s) {
-      // Reference/Waiting disabled: hide the option unless the item already is one.
-      if (s === 'reference' && s !== selected && !model.referenceEnabled()) return;
-      if (s === 'waiting' && s !== selected && !model.waitingEnabled()) return;
-      html += '<option value="' + s + '"' + (s === selected ? ' selected' : '') + '>' +
-        esc(model.STATUS_LABELS[s]) + '</option>';
-    });
-    return html;
+    return order
+      .filter(function (s) {
+        if (s === 'reference' && s !== current && !model.referenceEnabled()) return false;
+        if (s === 'waiting' && s !== current && !model.waitingEnabled()) return false;
+        return true;
+      })
+      .map(function (s) {
+        return { value: s, label: model.STATUS_LABELS[s] };
+      });
   }
 
-  // Select for one Engage criterion (estimate/energy/priority). Empty list =>
-  // the field is off; render nothing.
-  function criterionSelect(field, label, emptyLabel, values, selected) {
-    if (!values.length) return '';
-    var html = '<select class="field" data-field="' + field + '" aria-label="' + esc(label) + '">' +
-      '<option value="">' + esc(emptyLabel) + '</option>';
-    values.forEach(function (v) {
-      html += '<option value="' + esc(v) + '"' + (v === selected ? ' selected' : '') + '>' + esc(v) + '</option>';
-    });
-    // A stored value no longer in the list stays selectable until changed.
-    if (selected && values.indexOf(selected) === -1) {
-      html += '<option value="' + esc(selected) + '" selected>' + esc(selected) + '</option>';
-    }
-    return html + '</select>';
-  }
+  // "Agregar …" prompts of the editor rows, per field (also used to restore
+  // the prompt when a value is cleared).
+  var ATTR_ADD_LABELS = {
+    projectId: 'Agregar a un proyecto',
+    context: 'Agregar contexto',
+    estimate: 'Agregar tiempo estimado',
+    energy: 'Agregar nivel de energía',
+    priority: 'Agregar prioridad',
+  };
 
-  // Inline editor shown under an expanded row.
-  function itemEditor(item) {
+  var ATTR_ICONS = {
+    status: '📋',
+    projectId: '🗂️',
+    context: '📍',
+    estimate: '⏱',
+    energy: '🔋',
+    priority: '⚑',
+  };
+
+  // One quiet attribute row (Google Tasks-style vertical list): unset shows a
+  // muted "Agregar …" prompt, set shows the value plus a clear button; tapping
+  // opens a dialog with the choices. The value lives in a hidden field so the
+  // save path stays unchanged.
+  function attrRow(field, valueLabel, hiddenValue, clearable) {
+    var isSet = !!valueLabel;
     return (
-      '<div class="border-t border-stone-100 dark:border-stone-800 px-4 py-4 space-y-3" data-editor-for="' + item.id + '">' +
+      '<div class="flex items-center gap-1">' +
+      '<input type="hidden" data-field="' + field + '" value="' + esc(hiddenValue || '') + '" />' +
+      '<button type="button" class="flex-1 min-w-0 min-h-[44px] px-1 flex items-center gap-3 text-left" ' +
+      'data-action="edit-attr" data-attr="' + field + '" aria-haspopup="dialog">' +
+      '<span class="w-5 text-center shrink-0" aria-hidden="true">' + ATTR_ICONS[field] + '</span>' +
+      '<span class="truncate' + (isSet ? '' : ' text-stone-400 dark:text-stone-500') + '" data-role="' + field + '-label">' +
+      esc(isSet ? valueLabel : ATTR_ADD_LABELS[field]) + '</span>' +
+      '</button>' +
+      (clearable
+        ? '<button type="button" class="btn-ghost shrink-0" data-action="clear-attr" data-attr="' + field + '" aria-label="Quitar"' +
+          (isSet ? '' : ' style="display:none"') + '>×</button>'
+        : '') +
+      '</div>'
+    );
+  }
+
+  // Date row: same shape, but tapping opens the shared date picker dialog.
+  function dateRow(item) {
+    var addLabel = model.timeFieldEnabled() ? 'Agregar fecha/hora' : 'Agregar fecha';
+    var label = item.date
+      ? model.formatDate(item.date) + (item.time && model.timeFieldEnabled() ? ' · ' + item.time : '')
+      : '';
+    return (
+      '<div class="flex items-center gap-1">' +
+      '<input type="hidden" data-field="date" value="' + esc(item.date || '') + '" />' +
+      (model.timeFieldEnabled() ? '<input type="hidden" data-field="time" value="' + esc(item.time || '') + '" />' : '') +
+      '<button type="button" class="flex-1 min-w-0 min-h-[44px] px-1 flex items-center gap-3 text-left" ' +
+      'data-action="pick-date" aria-haspopup="dialog">' +
+      '<span class="w-5 text-center shrink-0" aria-hidden="true">📅</span>' +
+      '<span class="truncate' + (label ? '' : ' text-stone-400 dark:text-stone-500') + '" data-role="date-label">' +
+      esc(label || addLabel) + '</span>' +
+      '</button>' +
+      '<button type="button" class="btn-ghost shrink-0" data-action="clear-date" aria-label="Quitar fecha"' +
+      (item.date ? '' : ' style="display:none"') + '>×</button>' +
+      '</div>'
+    );
+  }
+
+  // Notes: free text, so it discloses inline instead of opening a dialog.
+  // The textarea keeps data-field="notes" while hidden so save reads it.
+  function notesRow(item) {
+    return (
+      '<button type="button" class="w-full min-h-[44px] px-1 flex items-center gap-3 text-left' +
+      (item.notes ? ' hidden' : '') + '" data-action="show-notes">' +
+      '<span class="w-5 text-center shrink-0" aria-hidden="true">☰</span>' +
+      '<span class="text-stone-400 dark:text-stone-500">Agregar detalles</span>' +
+      '</button>' +
+      '<textarea class="field' + (item.notes ? '' : ' hidden') + '" rows="2" data-field="notes" ' +
+      'placeholder="Detalles" aria-label="Detalles">' + esc(item.notes) + '</textarea>'
+    );
+  }
+
+  // Inline editor shown under an expanded row. Google Tasks-style: a vertical
+  // list of one-line rows, one attribute each; every row opens its own dialog
+  // (or reveals its own field), so nothing shows until it is needed.
+  function itemEditor(item) {
+    var project = item.projectId ? store.getProject(item.projectId) : null;
+    var html =
+      '<div class="border-t border-stone-100 dark:border-stone-800 px-4 py-4" data-editor-for="' + item.id + '">' +
       '<input type="text" class="field" data-field="title" value="' + esc(item.title) + '" aria-label="Título" />' +
-      '<textarea class="field" rows="2" data-field="notes" placeholder="Notas (opcional)" aria-label="Notas">' + esc(item.notes) + '</textarea>' +
-      '<div class="grid grid-cols-2 gap-2">' +
-      '<select class="field" data-field="status" aria-label="Lista">' + statusOptions(item.status) + '</select>' +
-      (model.contextsEnabled()
-        ? '<select class="field" data-field="context" aria-label="Contexto">' + contextOptions(item.context) + '</select>'
-        : '') +
-      '<select class="field" data-field="projectId" aria-label="Proyecto">' + projectOptions(item.projectId) + '</select>' +
-      '<input type="date" class="field" data-field="date" value="' + esc(item.date || '') + '" aria-label="Fecha" />' +
-      (model.timeFieldEnabled()
-        ? '<input type="time" class="field" data-field="time" value="' + esc(item.time || '') + '" aria-label="Hora (opcional)" />'
-        : '') +
-      criterionSelect('estimate', 'Tiempo estimado', 'Sin tiempo estimado', model.timeEstimates(), item.estimate) +
-      criterionSelect('energy', 'Nivel de energía', 'Sin nivel de energía', model.energyLevels(), item.energy) +
-      criterionSelect('priority', 'Prioridad', 'Sin prioridad', model.priorities(), item.priority) +
-      '</div>' +
-      '<input type="text" class="field" data-field="waitingFor" value="' + esc(item.waitingFor || '') + '" placeholder="¿De quién esperas respuesta?" aria-label="A la espera de" ' +
+      '<div class="mt-2">';
+    html += attrRow('status', model.STATUS_LABELS[item.status], item.status, false);
+    html += notesRow(item);
+    html += dateRow(item);
+    // Rows for optional attributes only exist while their feature is enabled
+    // (and, for projects/contexts, while there is something to choose).
+    if (model.activeProjects().length || item.projectId) {
+      html += attrRow('projectId', project ? project.name : '', item.projectId, true);
+    }
+    if (model.contextsEnabled() && (store.getContexts().length || item.context)) {
+      html += attrRow('context', item.context || '', item.context, true);
+    }
+    if (model.timeEstimates().length) html += attrRow('estimate', item.estimate || '', item.estimate, true);
+    if (model.energyLevels().length) html += attrRow('energy', item.energy || '', item.energy, true);
+    if (model.priorities().length) html += attrRow('priority', item.priority || '', item.priority, true);
+    html += '</div>';
+    html +=
+      '<input type="text" class="field mt-2" data-field="waitingFor" value="' + esc(item.waitingFor || '') + '" placeholder="¿De quién esperas respuesta?" aria-label="A la espera de" ' +
       (item.status === model.STATUS.WAITING ? '' : 'style="display:none"') + ' />' +
-      '<div class="flex items-center justify-between gap-2 pt-1">' +
+      '<div class="flex items-center justify-between gap-2 mt-3">' +
       '<button type="button" class="btn-ghost text-red-500 dark:text-red-400" data-action="delete" data-id="' + item.id + '">Eliminar</button>' +
       (item.status === model.STATUS.SCHEDULED && item.date && model.gcalEnabled() ? gcalLink(item) : '') +
       '<button type="button" class="btn-primary" data-action="save-item" data-id="' + item.id + '">Guardar</button>' +
       '</div>' +
-      '</div>'
-    );
+      '</div>';
+    return html;
   }
 
   function list(items, options) {
     if (!items.length) return '';
     return '<ul>' + items.map(function (item) { return itemRow(item, options); }).join('') + '</ul>';
+  }
+
+  // ---- "Ordenar por" (Google Tasks-style sort menu) ----
+
+  // Which list the sort dialog is open for (null when closed).
+  var sortMenuFor = null;
+
+  // Options available right now for one list. Criterion entries only exist
+  // while their feature is enabled in Settings and has values (the model
+  // accessors return [] otherwise); "Fecha" only where items can carry dates.
+  function sortOptions(hasDates) {
+    var options = [{ key: 'my-order', label: 'Mi orden' }];
+    if (hasDates) options.push({ key: 'date', label: 'Fecha' });
+    if (model.priorities().length) options.push({ key: 'priority', label: 'Prioridad' });
+    if (model.timeEstimates().length) options.push({ key: 'estimate', label: 'Tiempo estimado' });
+    if (model.energyLevels().length) options.push({ key: 'energy', label: 'Nivel de energía' });
+    options.push({ key: 'title', label: 'Título' });
+    return options;
+  }
+
+  // The stored preference, unless it points to an option no longer offered
+  // (its criterion was disabled or emptied): then fall back to "Mi orden".
+  function activeSort(listKey, hasDates) {
+    var pref = model.sortPref(listKey);
+    var valid = sortOptions(hasDates).some(function (o) { return o.key === pref; });
+    return valid ? pref : 'my-order';
+  }
+
+  function sortedItems(items, listKey, hasDates) {
+    return model.sortItems(items, activeSort(listKey, hasDates));
+  }
+
+  // Discreet right-aligned trigger above a list; pointless for lists of one.
+  function sortButton(listKey, hasDates, count) {
+    if (count < 2) return '';
+    var current = activeSort(listKey, hasDates);
+    var label = 'Ordenar';
+    sortOptions(hasDates).forEach(function (o) {
+      if (o.key === current && current !== 'my-order') label = o.label;
+    });
+    return (
+      '<div class="flex justify-end">' +
+      '<button type="button" class="btn-ghost text-sm' + (current !== 'my-order' ? ' text-accent dark:text-accent' : '') + '" ' +
+      'data-action="open-sort" data-list-key="' + listKey + '" data-has-dates="' + (hasDates ? '1' : '') + '" ' +
+      'aria-haspopup="dialog" aria-label="Ordenar por">' +
+      '<span aria-hidden="true" class="mr-1.5">↕</span>' + esc(label) +
+      '</button>' +
+      '</div>'
+    );
+  }
+
+  function openSortMenu(listKey, hasDates) {
+    sortMenuFor = { listKey: listKey, hasDates: hasDates };
+    var current = activeSort(listKey, hasDates);
+    var html = '<h2 class="font-semibold text-lg tracking-tight mb-2 px-1">Ordenar por</h2>';
+    sortOptions(hasDates).forEach(function (o) {
+      var active = o.key === current;
+      html +=
+        '<button type="button" class="w-full min-h-[48px] px-1 flex items-center gap-3 text-left rounded-xl hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors duration-150" ' +
+        'data-action="choose-sort" data-sort="' + o.key + '"' + (active ? ' aria-pressed="true"' : '') + '>' +
+        '<span class="w-5 text-accent" aria-hidden="true">' + (active ? '✓' : '') + '</span>' +
+        '<span' + (active ? ' class="font-medium"' : '') + '>' + esc(o.label) + '</span>' +
+        '</button>';
+    });
+    $('#sort-panel').html(html);
+    $('#sort-overlay').removeClass('hidden').attr('aria-hidden', 'false');
+  }
+
+  function closeSortMenu() {
+    sortMenuFor = null;
+    $('#sort-overlay').addClass('hidden').attr('aria-hidden', 'true');
+  }
+
+  // ---- Generic single-choice dialog (Google Tasks-style) ----
+  // Used by the editor rows: each attribute opens its own small dialog with
+  // just its choices, instead of a wall of always-visible selects.
+
+  // Callback of the open dialog (null when closed).
+  var chooserOnPick = null;
+
+  function openChooser(title, options, current, onPick) {
+    chooserOnPick = onPick;
+    var html = '<h2 class="font-semibold text-lg tracking-tight mb-2 px-1">' + esc(title) + '</h2>';
+    options.forEach(function (o) {
+      var active = o.value === current;
+      html +=
+        '<button type="button" class="w-full min-h-[48px] px-1 flex items-center gap-3 text-left rounded-xl hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors duration-150" ' +
+        'data-action="choose-option" data-value="' + esc(o.value) + '"' + (active ? ' aria-pressed="true"' : '') + '>' +
+        '<span class="w-5 text-accent shrink-0" aria-hidden="true">' + (active ? '✓' : '') + '</span>' +
+        '<span class="truncate' + (active ? ' font-medium' : '') + '">' + esc(o.label) + '</span>' +
+        '</button>';
+    });
+    $('#chooser-panel').html(html);
+    $('#chooser-overlay').removeClass('hidden').attr('aria-hidden', 'false');
+  }
+
+  function closeChooser() {
+    chooserOnPick = null;
+    $('#chooser-overlay').addClass('hidden').attr('aria-hidden', 'true');
   }
 
   // ---- Views ----
@@ -343,7 +495,8 @@
       : items;
 
     if (visible.length) {
-      html += list(visible);
+      html += sortButton('next', false, visible.length);
+      html += list(sortedItems(visible, 'next', false));
     } else if (items.length) {
       html += emptyState('🔍', 'No hay acciones en este contexto.');
     } else {
@@ -413,14 +566,32 @@
         '</div>';
     }
 
+    // The calendar button lets a new action be created already scheduled
+    // (one step, like the Google Tasks new-task sheet); the chosen day shows
+    // as a removable chip until the action is added.
     html +=
-      '<form id="project-item-form" class="card flex items-center gap-2 px-3 py-2 mb-6" data-project-id="' + project.id + '">' +
-      '<input type="text" id="project-item-input" class="flex-1 min-h-[44px] bg-transparent outline-none px-1 placeholder-stone-400 dark:placeholder-stone-500" placeholder="Añadir próxima acción…" autocomplete="off" />' +
+      '<form id="project-item-form" class="card px-3 py-2 mb-6" data-project-id="' + project.id + '">' +
+      '<div class="flex items-center gap-2">' +
+      '<input type="text" id="project-item-input" class="flex-1 min-w-0 min-h-[44px] bg-transparent outline-none px-1 placeholder-stone-400 dark:placeholder-stone-500" placeholder="Añadir próxima acción…" autocomplete="off" />' +
+      '<button type="button" id="project-item-date" class="w-11 h-11 shrink-0 inline-flex items-center justify-center text-lg" aria-label="Programar para un día" aria-haspopup="dialog">📅</button>' +
       '<button type="submit" class="btn-primary">Añadir</button>' +
+      '</div>' +
+      '<input type="hidden" id="project-item-date-value" />' +
+      '<input type="hidden" id="project-item-time-value" />' +
+      '<div id="project-item-date-chip" class="hidden items-center gap-1 pb-2">' +
+      '<span class="chip" id="project-item-date-label"></span>' +
+      '<button type="button" id="project-item-date-clear" class="btn-ghost" aria-label="Quitar fecha">×</button>' +
+      '</div>' +
       '</form>';
 
-    if (open.length) html += list(open);
-    else html += emptyState('✨', 'Nada pendiente en este proyecto.');
+    // Project steps can mix dated (scheduled) and undated actions, so this
+    // list also offers sorting by date; the preference is shared by all projects.
+    if (open.length) {
+      html += sortButton('project', true, open.length);
+      html += list(sortedItems(open, 'project', true));
+    } else {
+      html += emptyState('✨', 'Nada pendiente en este proyecto.');
+    }
 
     // Project support material (workflow map): reference items filed under this project.
     if (support.length) {
@@ -480,7 +651,8 @@
     var items = model.waitingItems();
     var html = header('A la espera', 'Cosas delegadas o pendientes de otras personas.');
     if (!items.length) return html + emptyState('📮', 'No esperas nada de nadie ahora mismo.');
-    html += list(items);
+    html += sortButton('waiting', false, items.length);
+    html += list(sortedItems(items, 'waiting', false));
     return html;
   }
 
@@ -492,7 +664,8 @@
       return html + emptyState('🌙', 'Nada incubando. Las ideas nuevas pueden esperar aquí.');
     }
     if (items.length) {
-      html += '<ul>' + items.map(function (item) {
+      html += sortButton('someday', false, items.length);
+      html += '<ul>' + sortedItems(items, 'someday', false).map(function (item) {
         return itemRow(item, {
           trailing:
             '<button type="button" class="btn-ghost text-accent shrink-0" data-action="activate" data-id="' + item.id + '">Activar</button>',
@@ -666,7 +839,8 @@
     var items = model.referenceItems();
     var html = header('Referencia', 'Material útil que no requiere acción.');
     if (!items.length) return html + emptyState('📚', 'Sin material de referencia todavía.');
-    html += list(items);
+    html += sortButton('reference', false, items.length);
+    html += list(sortedItems(items, 'reference', false));
     return html;
   }
 
@@ -1166,9 +1340,133 @@
     });
 
     // Show/hide the waiting-for field as status changes inside the editor.
+    // Choosing "Programada" with no date jumps straight into the picker: a
+    // scheduled item without a day would silently fall back to Next on save.
     $view.on('change', '[data-field="status"]', function () {
       var $editor = $(this).closest('[data-editor-for]');
       $editor.find('[data-field="waitingFor"]').toggle($(this).val() === model.STATUS.WAITING);
+      if ($(this).val() === model.STATUS.SCHEDULED && !$editor.find('[data-field="date"]').val()) {
+        $editor.find('[data-action="pick-date"]').trigger('click');
+      }
+    });
+
+    // Editor attribute rows: each one opens its own dialog with its choices.
+    $view.on('click', '[data-action="edit-attr"]', function () {
+      var attr = $(this).data('attr');
+      var $editor = $(this).closest('[data-editor-for]');
+      var current = $editor.find('[data-field="' + attr + '"]').val();
+
+      function apply(value, label) {
+        $editor.find('[data-field="' + attr + '"]').val(value);
+        $editor.find('[data-role="' + attr + '-label"]')
+          .text(label)
+          .removeClass('text-stone-400 dark:text-stone-500');
+        $editor.find('[data-action="clear-attr"][data-attr="' + attr + '"]').show();
+      }
+
+      if (attr === 'status') {
+        openChooser('Lista', statusChoices(current), current, function (value) {
+          apply(value, model.STATUS_LABELS[value]);
+          $editor.find('[data-field="status"]').trigger('change');
+        });
+        return;
+      }
+      if (attr === 'projectId') {
+        openChooser(
+          'Proyecto',
+          model.activeProjects().map(function (p) { return { value: p.id, label: p.name }; }),
+          current,
+          function (value) {
+            var project = store.getProject(value);
+            apply(value, project ? project.name : value);
+          }
+        );
+        return;
+      }
+      if (attr === 'context') {
+        openChooser(
+          'Contexto',
+          store.getContexts().map(function (c) { return { value: c, label: c }; }),
+          current,
+          function (value) { apply(value, value); }
+        );
+        return;
+      }
+      // Engage criteria (estimate/energy/priority): choices come from the
+      // user-edited value lists; a stored value no longer in its list stays
+      // choosable until changed.
+      var values = { estimate: model.timeEstimates(), energy: model.energyLevels(), priority: model.priorities() }[attr];
+      var titles = { estimate: 'Tiempo estimado', energy: 'Nivel de energía', priority: 'Prioridad' };
+      var options = values.map(function (v) { return { value: v, label: v }; });
+      if (current && values.indexOf(current) === -1) options.push({ value: current, label: current });
+      openChooser(titles[attr], options, current, function (value) { apply(value, value); });
+    });
+
+    $view.on('click', '[data-action="clear-attr"]', function () {
+      var attr = $(this).data('attr');
+      var $editor = $(this).closest('[data-editor-for]');
+      $editor.find('[data-field="' + attr + '"]').val('');
+      $editor.find('[data-role="' + attr + '-label"]')
+        .text(ATTR_ADD_LABELS[attr])
+        .addClass('text-stone-400 dark:text-stone-500');
+      $(this).hide();
+    });
+
+    $view.on('click', '[data-action="show-notes"]', function () {
+      var $editor = $(this).closest('[data-editor-for]');
+      $(this).addClass('hidden');
+      $editor.find('[data-field="notes"]').removeClass('hidden').trigger('focus');
+    });
+
+    $('#chooser-panel').on('click', '[data-action="choose-option"]', function () {
+      var onPick = chooserOnPick;
+      var value = $(this).attr('data-value');
+      closeChooser();
+      if (onPick) onPick(value);
+    });
+
+    $('#chooser-overlay').on('click', function (e) {
+      if (e.target === this) closeChooser();
+    });
+
+    $(document).on('keydown', function (e) {
+      if (e.key === 'Escape') closeChooser();
+    });
+
+    // Date picker dialog for the inline editor. Choosing a day turns the item
+    // into a scheduled one (setup guide calendar rule: a date means it must
+    // happen that day); clearing it sends it back to Next Actions.
+    $view.on('click', '[data-action="pick-date"]', function () {
+      var $editor = $(this).closest('[data-editor-for]');
+      global.GTD.datepicker.open({
+        date: $editor.find('[data-field="date"]').val() || null,
+        time: $editor.find('[data-field="time"]').val() || null,
+        onDone: function (date, time) {
+          $editor.find('[data-field="date"]').val(date);
+          $editor.find('[data-field="time"]').val(time || '');
+          $editor.find('[data-field="status"]').val(model.STATUS.SCHEDULED).trigger('change');
+          $editor.find('[data-role="status-label"]').text(model.STATUS_LABELS[model.STATUS.SCHEDULED]);
+          $editor.find('[data-role="date-label"]')
+            .text(model.formatDate(date) + (time && model.timeFieldEnabled() ? ' · ' + time : ''))
+            .removeClass('text-stone-400 dark:text-stone-500');
+          $editor.find('[data-action="clear-date"]').show();
+        },
+      });
+    });
+
+    $view.on('click', '[data-action="clear-date"]', function () {
+      var $editor = $(this).closest('[data-editor-for]');
+      $editor.find('[data-field="date"]').val('');
+      $editor.find('[data-field="time"]').val('');
+      var $status = $editor.find('[data-field="status"]');
+      if ($status.val() === model.STATUS.SCHEDULED) {
+        $status.val(model.STATUS.NEXT).trigger('change');
+        $editor.find('[data-role="status-label"]').text(model.STATUS_LABELS[model.STATUS.NEXT]);
+      }
+      $editor.find('[data-role="date-label"]')
+        .text(model.timeFieldEnabled() ? 'Agregar fecha/hora' : 'Agregar fecha')
+        .addClass('text-stone-400 dark:text-stone-500');
+      $(this).hide();
     });
 
     $view.on('click', '[data-action="delete"]', function () {
@@ -1209,6 +1507,26 @@
     $view.on('click', '[data-action="filter-context"]', function () {
       currentContextFilter = $(this).data('context') || '';
       refresh();
+    });
+
+    // "Ordenar por" menu.
+    $view.on('click', '[data-action="open-sort"]', function () {
+      openSortMenu($(this).data('list-key'), !!$(this).data('has-dates'));
+    });
+
+    $('#sort-panel').on('click', '[data-action="choose-sort"]', function () {
+      if (!sortMenuFor) return;
+      model.setSortPref(sortMenuFor.listKey, $(this).data('sort'));
+      closeSortMenu();
+      refresh();
+    });
+
+    $('#sort-overlay').on('click', function (e) {
+      if (e.target === this) closeSortMenu();
+    });
+
+    $(document).on('keydown', function (e) {
+      if (e.key === 'Escape') closeSortMenu();
     });
 
     // Help popup: what a "context" is (triggers live in Settings and the Clarify wizard).
@@ -1327,9 +1645,39 @@
       var projectId = $(this).data('project-id');
       var title = $('#project-item-input').val().trim();
       if (!title) return;
-      store.addItem({ title: title, status: model.STATUS.NEXT, projectId: projectId });
+      var fields = { title: title, status: model.STATUS.NEXT, projectId: projectId };
+      // A chosen day makes the new action calendar-bound from the start
+      // (setup guide calendar rule: only day-specific actions carry a date).
+      var date = $('#project-item-date-value').val();
+      if (date) {
+        fields.status = model.STATUS.SCHEDULED;
+        fields.date = date;
+        fields.time = $('#project-item-time-value').val() || null;
+      }
+      store.addItem(fields);
       refresh();
       $('#project-item-input').trigger('focus');
+    });
+
+    $view.on('click', '#project-item-date', function () {
+      global.GTD.datepicker.open({
+        date: $('#project-item-date-value').val() || null,
+        time: $('#project-item-time-value').val() || null,
+        onDone: function (date, time) {
+          $('#project-item-date-value').val(date);
+          $('#project-item-time-value').val(time || '');
+          $('#project-item-date-label').text(
+            '📅 ' + model.formatDate(date) + (time && model.timeFieldEnabled() ? ' · ' + time : '')
+          );
+          $('#project-item-date-chip').removeClass('hidden').addClass('flex');
+        },
+      });
+    });
+
+    $view.on('click', '#project-item-date-clear', function () {
+      $('#project-item-date-value').val('');
+      $('#project-item-time-value').val('');
+      $('#project-item-date-chip').addClass('hidden').removeClass('flex');
     });
 
     $view.on('change', '#project-name', function () {
@@ -1771,6 +2119,8 @@
     collapseEditor: function () {
       expandedItemId = null;
       closeHorizonEditor();
+      closeSortMenu();
+      closeChooser();
     },
   };
 })(window, jQuery);
