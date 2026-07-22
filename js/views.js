@@ -193,6 +193,28 @@
     return html + '</select>';
   }
 
+  // Google Tasks-style date row for the inline editor: one button showing the
+  // chosen day (or the call to set one) opens the shared picker dialog. The
+  // value lives in hidden fields so the save path stays unchanged.
+  function dateRow(item) {
+    var label = item.date
+      ? model.formatDate(item.date) + (item.time && model.timeFieldEnabled() ? ' · ' + item.time : '')
+      : 'Establecer fecha';
+    return (
+      '<div class="col-span-2">' +
+      '<input type="hidden" data-field="date" value="' + esc(item.date || '') + '" />' +
+      (model.timeFieldEnabled() ? '<input type="hidden" data-field="time" value="' + esc(item.time || '') + '" />' : '') +
+      '<div class="flex items-center gap-1">' +
+      '<button type="button" class="btn-secondary flex-1 justify-start gap-2 font-normal" data-action="pick-date" aria-haspopup="dialog">' +
+      '<span aria-hidden="true">📅</span><span data-role="date-label">' + esc(label) + '</span>' +
+      '</button>' +
+      '<button type="button" class="btn-ghost shrink-0" data-action="clear-date" aria-label="Quitar fecha"' +
+      (item.date ? '' : ' style="display:none"') + '>×</button>' +
+      '</div>' +
+      '</div>'
+    );
+  }
+
   // Inline editor shown under an expanded row.
   function itemEditor(item) {
     return (
@@ -205,10 +227,7 @@
         ? '<select class="field" data-field="context" aria-label="Contexto">' + contextOptions(item.context) + '</select>'
         : '') +
       '<select class="field" data-field="projectId" aria-label="Proyecto">' + projectOptions(item.projectId) + '</select>' +
-      '<input type="date" class="field" data-field="date" value="' + esc(item.date || '') + '" aria-label="Fecha" />' +
-      (model.timeFieldEnabled()
-        ? '<input type="time" class="field" data-field="time" value="' + esc(item.time || '') + '" aria-label="Hora (opcional)" />'
-        : '') +
+      dateRow(item) +
       criterionSelect('estimate', 'Tiempo estimado', 'Sin tiempo estimado', model.timeEstimates(), item.estimate) +
       criterionSelect('energy', 'Nivel de energía', 'Sin nivel de energía', model.energyLevels(), item.energy) +
       criterionSelect('priority', 'Prioridad', 'Sin prioridad', model.priorities(), item.priority) +
@@ -413,10 +432,22 @@
         '</div>';
     }
 
+    // The calendar button lets a new action be created already scheduled
+    // (one step, like the Google Tasks new-task sheet); the chosen day shows
+    // as a removable chip until the action is added.
     html +=
-      '<form id="project-item-form" class="card flex items-center gap-2 px-3 py-2 mb-6" data-project-id="' + project.id + '">' +
-      '<input type="text" id="project-item-input" class="flex-1 min-h-[44px] bg-transparent outline-none px-1 placeholder-stone-400 dark:placeholder-stone-500" placeholder="Añadir próxima acción…" autocomplete="off" />' +
+      '<form id="project-item-form" class="card px-3 py-2 mb-6" data-project-id="' + project.id + '">' +
+      '<div class="flex items-center gap-2">' +
+      '<input type="text" id="project-item-input" class="flex-1 min-w-0 min-h-[44px] bg-transparent outline-none px-1 placeholder-stone-400 dark:placeholder-stone-500" placeholder="Añadir próxima acción…" autocomplete="off" />' +
+      '<button type="button" id="project-item-date" class="w-11 h-11 shrink-0 inline-flex items-center justify-center text-lg" aria-label="Programar para un día" aria-haspopup="dialog">📅</button>' +
       '<button type="submit" class="btn-primary">Añadir</button>' +
+      '</div>' +
+      '<input type="hidden" id="project-item-date-value" />' +
+      '<input type="hidden" id="project-item-time-value" />' +
+      '<div id="project-item-date-chip" class="hidden items-center gap-1 pb-2">' +
+      '<span class="chip" id="project-item-date-label"></span>' +
+      '<button type="button" id="project-item-date-clear" class="btn-ghost" aria-label="Quitar fecha">×</button>' +
+      '</div>' +
       '</form>';
 
     if (open.length) html += list(open);
@@ -1166,9 +1197,44 @@
     });
 
     // Show/hide the waiting-for field as status changes inside the editor.
+    // Choosing "Programada" with no date jumps straight into the picker: a
+    // scheduled item without a day would silently fall back to Next on save.
     $view.on('change', '[data-field="status"]', function () {
       var $editor = $(this).closest('[data-editor-for]');
       $editor.find('[data-field="waitingFor"]').toggle($(this).val() === model.STATUS.WAITING);
+      if ($(this).val() === model.STATUS.SCHEDULED && !$editor.find('[data-field="date"]').val()) {
+        $editor.find('[data-action="pick-date"]').trigger('click');
+      }
+    });
+
+    // Date picker dialog for the inline editor. Choosing a day turns the item
+    // into a scheduled one (setup guide calendar rule: a date means it must
+    // happen that day); clearing it sends it back to Next Actions.
+    $view.on('click', '[data-action="pick-date"]', function () {
+      var $editor = $(this).closest('[data-editor-for]');
+      global.GTD.datepicker.open({
+        date: $editor.find('[data-field="date"]').val() || null,
+        time: $editor.find('[data-field="time"]').val() || null,
+        onDone: function (date, time) {
+          $editor.find('[data-field="date"]').val(date);
+          $editor.find('[data-field="time"]').val(time || '');
+          $editor.find('[data-field="status"]').val(model.STATUS.SCHEDULED).trigger('change');
+          $editor.find('[data-role="date-label"]').text(
+            model.formatDate(date) + (time && model.timeFieldEnabled() ? ' · ' + time : '')
+          );
+          $editor.find('[data-action="clear-date"]').show();
+        },
+      });
+    });
+
+    $view.on('click', '[data-action="clear-date"]', function () {
+      var $editor = $(this).closest('[data-editor-for]');
+      $editor.find('[data-field="date"]').val('');
+      $editor.find('[data-field="time"]').val('');
+      var $status = $editor.find('[data-field="status"]');
+      if ($status.val() === model.STATUS.SCHEDULED) $status.val(model.STATUS.NEXT).trigger('change');
+      $editor.find('[data-role="date-label"]').text('Establecer fecha');
+      $(this).hide();
     });
 
     $view.on('click', '[data-action="delete"]', function () {
@@ -1327,9 +1393,39 @@
       var projectId = $(this).data('project-id');
       var title = $('#project-item-input').val().trim();
       if (!title) return;
-      store.addItem({ title: title, status: model.STATUS.NEXT, projectId: projectId });
+      var fields = { title: title, status: model.STATUS.NEXT, projectId: projectId };
+      // A chosen day makes the new action calendar-bound from the start
+      // (setup guide calendar rule: only day-specific actions carry a date).
+      var date = $('#project-item-date-value').val();
+      if (date) {
+        fields.status = model.STATUS.SCHEDULED;
+        fields.date = date;
+        fields.time = $('#project-item-time-value').val() || null;
+      }
+      store.addItem(fields);
       refresh();
       $('#project-item-input').trigger('focus');
+    });
+
+    $view.on('click', '#project-item-date', function () {
+      global.GTD.datepicker.open({
+        date: $('#project-item-date-value').val() || null,
+        time: $('#project-item-time-value').val() || null,
+        onDone: function (date, time) {
+          $('#project-item-date-value').val(date);
+          $('#project-item-time-value').val(time || '');
+          $('#project-item-date-label').text(
+            '📅 ' + model.formatDate(date) + (time && model.timeFieldEnabled() ? ' · ' + time : '')
+          );
+          $('#project-item-date-chip').removeClass('hidden').addClass('flex');
+        },
+      });
+    });
+
+    $view.on('click', '#project-item-date-clear', function () {
+      $('#project-item-date-value').val('');
+      $('#project-item-time-value').val('');
+      $('#project-item-date-chip').addClass('hidden').removeClass('flex');
     });
 
     $view.on('change', '#project-name', function () {
