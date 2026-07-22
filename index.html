@@ -507,6 +507,19 @@
       </div>
     </div>
 
+    <!-- Generic single-choice dialog (list, project, context, criteria…).
+         Each editor row opens it with just its choices; body rendered by js/views.js. -->
+    <div id="chooser-overlay" class="fixed inset-0 z-50 hidden bg-stone-900/40 dark:bg-black/60" aria-hidden="true">
+      <div class="max-w-sm mx-auto mt-[24vh] px-4">
+        <div
+          id="chooser-panel"
+          class="bg-white dark:bg-stone-900 rounded-2xl p-4 border border-stone-200 dark:border-stone-700 max-h-[60vh] overflow-y-auto"
+          role="dialog"
+          aria-modal="true"
+        ></div>
+      </div>
+    </div>
+
     <!-- Transient confirmation toast -->
     <div
       id="toast"
