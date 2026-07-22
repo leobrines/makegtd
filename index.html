@@ -518,6 +518,63 @@
       </div>
     </div>
 
+    <!-- Shared date/time picker: single-month grid with optional time behind
+         progressive disclosure. The body is rendered by js/datepicker.js. -->
+    <div id="datepicker-overlay" class="fixed inset-0 z-50 hidden bg-stone-900/40 dark:bg-black/60" aria-hidden="true">
+      <div class="max-w-sm mx-auto mt-[10vh] px-4">
+        <div
+          id="datepicker-panel"
+          class="bg-white dark:bg-stone-900 rounded-2xl p-4 border border-stone-200 dark:border-stone-700"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Elegir fecha"
+        ></div>
+      </div>
+    </div>
+
+    <!-- "Ordenar por" menu for task lists. Options depend on the list and on
+         which criteria are enabled; the body is rendered by js/views.js. -->
+    <div id="sort-overlay" class="fixed inset-0 z-50 hidden bg-stone-900/40 dark:bg-black/60" aria-hidden="true">
+      <div class="max-w-sm mx-auto mt-[24vh] px-4">
+        <div
+          id="sort-panel"
+          class="bg-white dark:bg-stone-900 rounded-2xl p-4 border border-stone-200 dark:border-stone-700"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Ordenar por"
+        ></div>
+      </div>
+    </div>
+
+    <!-- Generic single-choice dialog (list, project, context, criteria…).
+         Each editor row opens it with just its choices; body rendered by js/views.js. -->
+    <div id="chooser-overlay" class="fixed inset-0 z-50 hidden bg-stone-900/40 dark:bg-black/60" aria-hidden="true">
+      <div class="max-w-sm mx-auto mt-[24vh] px-4">
+        <div
+          id="chooser-panel"
+          class="bg-white dark:bg-stone-900 rounded-2xl p-4 border border-stone-200 dark:border-stone-700 max-h-[60vh] overflow-y-auto"
+          role="dialog"
+          aria-modal="true"
+        ></div>
+      </div>
+    </div>
+
+    <!-- Sync setup wizard: step-by-step modal that connects a backup destination
+         (Google Drive or a self-hosted server), opened from Settings. The steps
+         are rendered one at a time by js/views.js; this shell only provides the
+         overlay and the dialog box. -->
+    <div id="sync-wizard-overlay" class="fixed inset-0 z-50 hidden overflow-y-auto bg-stone-900/40 dark:bg-black/60" aria-hidden="true">
+      <div class="max-w-lg mx-auto mt-[8vh] mb-8 px-4">
+        <div
+          id="sync-wizard"
+          class="relative bg-white dark:bg-stone-900 rounded-2xl p-5 border border-stone-200 dark:border-stone-700"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="sync-wizard-title"
+        ></div>
+      </div>
+    </div>
+
     <!-- Transient confirmation toast -->
     <div
       id="toast"
@@ -536,6 +593,7 @@
   <script src="js/drive.js"></script>
   <script src="js/server.js"></script>
   <script src="js/model.js"></script>
+  <script src="js/datepicker.js"></script>
   <script src="js/views.js"></script>
   <script src="js/process.js"></script>
   <script src="js/review.js"></script>

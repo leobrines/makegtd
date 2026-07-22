@@ -160,85 +160,237 @@
     );
   }
 
-  function contextOptions(selected) {
-    var html = '<option value="">Sin contexto</option>';
-    store.getContexts().forEach(function (c) {
-      html += '<option value="' + esc(c) + '"' + (c === selected ? ' selected' : '') + '>' + esc(c) + '</option>';
-    });
-    return html;
-  }
-
-  function projectOptions(selected) {
-    var html = '<option value="">Sin proyecto</option>';
-    model.activeProjects().forEach(function (p) {
-      html += '<option value="' + p.id + '"' + (p.id === selected ? ' selected' : '') + '>' + esc(p.name) + '</option>';
-    });
-    return html;
-  }
-
-  function statusOptions(selected) {
+  // Status choices for the editor's "Lista" dialog. Reference/Waiting
+  // disabled in Settings: hide the choice unless the item already is one.
+  function statusChoices(current) {
     var order = ['next', 'scheduled', 'waiting', 'someday', 'reference', 'inbox'];
-    var html = '';
-    order.forEach(function (s) {
-      // Reference/Waiting disabled: hide the option unless the item already is one.
-      if (s === 'reference' && s !== selected && !model.referenceEnabled()) return;
-      if (s === 'waiting' && s !== selected && !model.waitingEnabled()) return;
-      html += '<option value="' + s + '"' + (s === selected ? ' selected' : '') + '>' +
-        esc(model.STATUS_LABELS[s]) + '</option>';
-    });
-    return html;
+    return order
+      .filter(function (s) {
+        if (s === 'reference' && s !== current && !model.referenceEnabled()) return false;
+        if (s === 'waiting' && s !== current && !model.waitingEnabled()) return false;
+        return true;
+      })
+      .map(function (s) {
+        return { value: s, label: model.STATUS_LABELS[s] };
+      });
   }
 
-  // Select for one Engage criterion (estimate/energy/priority). Empty list =>
-  // the field is off; render nothing.
-  function criterionSelect(field, label, emptyLabel, values, selected) {
-    if (!values.length) return '';
-    var html = '<select class="field" data-field="' + field + '" aria-label="' + esc(label) + '">' +
-      '<option value="">' + esc(emptyLabel) + '</option>';
-    values.forEach(function (v) {
-      html += '<option value="' + esc(v) + '"' + (v === selected ? ' selected' : '') + '>' + esc(v) + '</option>';
-    });
-    // A stored value no longer in the list stays selectable until changed.
-    if (selected && values.indexOf(selected) === -1) {
-      html += '<option value="' + esc(selected) + '" selected>' + esc(selected) + '</option>';
-    }
-    return html + '</select>';
-  }
+  // "Agregar …" prompts of the editor rows, per field (also used to restore
+  // the prompt when a value is cleared).
+  var ATTR_ADD_LABELS = {
+    projectId: 'Agregar a un proyecto',
+    context: 'Agregar contexto',
+    estimate: 'Agregar tiempo estimado',
+    energy: 'Agregar nivel de energía',
+    priority: 'Agregar prioridad',
+  };
 
-  // Inline editor shown under an expanded row.
-  function itemEditor(item) {
+  var ATTR_ICONS = {
+    status: '📋',
+    projectId: '🗂️',
+    context: '📍',
+    estimate: '⏱',
+    energy: '🔋',
+    priority: '⚑',
+  };
+
+  // One quiet attribute row (Google Tasks-style vertical list): unset shows a
+  // muted "Agregar …" prompt, set shows the value plus a clear button; tapping
+  // opens a dialog with the choices. The value lives in a hidden field so the
+  // save path stays unchanged.
+  function attrRow(field, valueLabel, hiddenValue, clearable) {
+    var isSet = !!valueLabel;
     return (
-      '<div class="border-t border-stone-100 dark:border-stone-800 px-4 py-4 space-y-3" data-editor-for="' + item.id + '">' +
+      '<div class="flex items-center gap-1">' +
+      '<input type="hidden" data-field="' + field + '" value="' + esc(hiddenValue || '') + '" />' +
+      '<button type="button" class="flex-1 min-w-0 min-h-[44px] px-1 flex items-center gap-3 text-left" ' +
+      'data-action="edit-attr" data-attr="' + field + '" aria-haspopup="dialog">' +
+      '<span class="w-5 text-center shrink-0" aria-hidden="true">' + ATTR_ICONS[field] + '</span>' +
+      '<span class="truncate' + (isSet ? '' : ' text-stone-400 dark:text-stone-500') + '" data-role="' + field + '-label">' +
+      esc(isSet ? valueLabel : ATTR_ADD_LABELS[field]) + '</span>' +
+      '</button>' +
+      (clearable
+        ? '<button type="button" class="btn-ghost shrink-0" data-action="clear-attr" data-attr="' + field + '" aria-label="Quitar"' +
+          (isSet ? '' : ' style="display:none"') + '>×</button>'
+        : '') +
+      '</div>'
+    );
+  }
+
+  // Date row: same shape, but tapping opens the shared date picker dialog.
+  function dateRow(item) {
+    var addLabel = model.timeFieldEnabled() ? 'Agregar fecha/hora' : 'Agregar fecha';
+    var label = item.date
+      ? model.formatDate(item.date) + (item.time && model.timeFieldEnabled() ? ' · ' + item.time : '')
+      : '';
+    return (
+      '<div class="flex items-center gap-1">' +
+      '<input type="hidden" data-field="date" value="' + esc(item.date || '') + '" />' +
+      (model.timeFieldEnabled() ? '<input type="hidden" data-field="time" value="' + esc(item.time || '') + '" />' : '') +
+      '<button type="button" class="flex-1 min-w-0 min-h-[44px] px-1 flex items-center gap-3 text-left" ' +
+      'data-action="pick-date" aria-haspopup="dialog">' +
+      '<span class="w-5 text-center shrink-0" aria-hidden="true">📅</span>' +
+      '<span class="truncate' + (label ? '' : ' text-stone-400 dark:text-stone-500') + '" data-role="date-label">' +
+      esc(label || addLabel) + '</span>' +
+      '</button>' +
+      '<button type="button" class="btn-ghost shrink-0" data-action="clear-date" aria-label="Quitar fecha"' +
+      (item.date ? '' : ' style="display:none"') + '>×</button>' +
+      '</div>'
+    );
+  }
+
+  // Notes: free text, so it discloses inline instead of opening a dialog.
+  // The textarea keeps data-field="notes" while hidden so save reads it.
+  function notesRow(item) {
+    return (
+      '<button type="button" class="w-full min-h-[44px] px-1 flex items-center gap-3 text-left' +
+      (item.notes ? ' hidden' : '') + '" data-action="show-notes">' +
+      '<span class="w-5 text-center shrink-0" aria-hidden="true">☰</span>' +
+      '<span class="text-stone-400 dark:text-stone-500">Agregar detalles</span>' +
+      '</button>' +
+      '<textarea class="field' + (item.notes ? '' : ' hidden') + '" rows="2" data-field="notes" ' +
+      'placeholder="Detalles" aria-label="Detalles">' + esc(item.notes) + '</textarea>'
+    );
+  }
+
+  // Inline editor shown under an expanded row. Google Tasks-style: a vertical
+  // list of one-line rows, one attribute each; every row opens its own dialog
+  // (or reveals its own field), so nothing shows until it is needed.
+  function itemEditor(item) {
+    var project = item.projectId ? store.getProject(item.projectId) : null;
+    var html =
+      '<div class="border-t border-stone-100 dark:border-stone-800 px-4 py-4" data-editor-for="' + item.id + '">' +
       '<input type="text" class="field" data-field="title" value="' + esc(item.title) + '" aria-label="Título" />' +
-      '<textarea class="field" rows="2" data-field="notes" placeholder="Notas (opcional)" aria-label="Notas">' + esc(item.notes) + '</textarea>' +
-      '<div class="grid grid-cols-2 gap-2">' +
-      '<select class="field" data-field="status" aria-label="Lista">' + statusOptions(item.status) + '</select>' +
-      (model.contextsEnabled()
-        ? '<select class="field" data-field="context" aria-label="Contexto">' + contextOptions(item.context) + '</select>'
-        : '') +
-      '<select class="field" data-field="projectId" aria-label="Proyecto">' + projectOptions(item.projectId) + '</select>' +
-      '<input type="date" class="field" data-field="date" value="' + esc(item.date || '') + '" aria-label="Fecha" />' +
-      (model.timeFieldEnabled()
-        ? '<input type="time" class="field" data-field="time" value="' + esc(item.time || '') + '" aria-label="Hora (opcional)" />'
-        : '') +
-      criterionSelect('estimate', 'Tiempo estimado', 'Sin tiempo estimado', model.timeEstimates(), item.estimate) +
-      criterionSelect('energy', 'Nivel de energía', 'Sin nivel de energía', model.energyLevels(), item.energy) +
-      criterionSelect('priority', 'Prioridad', 'Sin prioridad', model.priorities(), item.priority) +
-      '</div>' +
-      '<input type="text" class="field" data-field="waitingFor" value="' + esc(item.waitingFor || '') + '" placeholder="¿De quién esperas respuesta?" aria-label="A la espera de" ' +
+      '<div class="mt-2">';
+    html += attrRow('status', model.STATUS_LABELS[item.status], item.status, false);
+    html += notesRow(item);
+    html += dateRow(item);
+    // Rows for optional attributes only exist while their feature is enabled
+    // (and, for projects/contexts, while there is something to choose).
+    if (model.activeProjects().length || item.projectId) {
+      html += attrRow('projectId', project ? project.name : '', item.projectId, true);
+    }
+    if (model.contextsEnabled() && (store.getContexts().length || item.context)) {
+      html += attrRow('context', item.context || '', item.context, true);
+    }
+    if (model.timeEstimates().length) html += attrRow('estimate', item.estimate || '', item.estimate, true);
+    if (model.energyLevels().length) html += attrRow('energy', item.energy || '', item.energy, true);
+    if (model.priorities().length) html += attrRow('priority', item.priority || '', item.priority, true);
+    html += '</div>';
+    html +=
+      '<input type="text" class="field mt-2" data-field="waitingFor" value="' + esc(item.waitingFor || '') + '" placeholder="¿De quién esperas respuesta?" aria-label="A la espera de" ' +
       (item.status === model.STATUS.WAITING ? '' : 'style="display:none"') + ' />' +
-      '<div class="flex items-center justify-between gap-2 pt-1">' +
+      '<div class="flex items-center justify-between gap-2 mt-3">' +
       '<button type="button" class="btn-ghost text-red-500 dark:text-red-400" data-action="delete" data-id="' + item.id + '">Eliminar</button>' +
       (item.status === model.STATUS.SCHEDULED && item.date && model.gcalEnabled() ? gcalLink(item) : '') +
       '<button type="button" class="btn-primary" data-action="save-item" data-id="' + item.id + '">Guardar</button>' +
       '</div>' +
-      '</div>'
-    );
+      '</div>';
+    return html;
   }
 
   function list(items, options) {
     if (!items.length) return '';
     return '<ul>' + items.map(function (item) { return itemRow(item, options); }).join('') + '</ul>';
+  }
+
+  // ---- "Ordenar por" (Google Tasks-style sort menu) ----
+
+  // Which list the sort dialog is open for (null when closed).
+  var sortMenuFor = null;
+
+  // Options available right now for one list. Criterion entries only exist
+  // while their feature is enabled in Settings and has values (the model
+  // accessors return [] otherwise); "Fecha" only where items can carry dates.
+  function sortOptions(hasDates) {
+    var options = [{ key: 'my-order', label: 'Mi orden' }];
+    if (hasDates) options.push({ key: 'date', label: 'Fecha' });
+    if (model.priorities().length) options.push({ key: 'priority', label: 'Prioridad' });
+    if (model.timeEstimates().length) options.push({ key: 'estimate', label: 'Tiempo estimado' });
+    if (model.energyLevels().length) options.push({ key: 'energy', label: 'Nivel de energía' });
+    options.push({ key: 'title', label: 'Título' });
+    return options;
+  }
+
+  // The stored preference, unless it points to an option no longer offered
+  // (its criterion was disabled or emptied): then fall back to "Mi orden".
+  function activeSort(listKey, hasDates) {
+    var pref = model.sortPref(listKey);
+    var valid = sortOptions(hasDates).some(function (o) { return o.key === pref; });
+    return valid ? pref : 'my-order';
+  }
+
+  function sortedItems(items, listKey, hasDates) {
+    return model.sortItems(items, activeSort(listKey, hasDates));
+  }
+
+  // Discreet right-aligned trigger above a list; pointless for lists of one.
+  function sortButton(listKey, hasDates, count) {
+    if (count < 2) return '';
+    var current = activeSort(listKey, hasDates);
+    var label = 'Ordenar';
+    sortOptions(hasDates).forEach(function (o) {
+      if (o.key === current && current !== 'my-order') label = o.label;
+    });
+    return (
+      '<div class="flex justify-end">' +
+      '<button type="button" class="btn-ghost text-sm' + (current !== 'my-order' ? ' text-accent dark:text-accent' : '') + '" ' +
+      'data-action="open-sort" data-list-key="' + listKey + '" data-has-dates="' + (hasDates ? '1' : '') + '" ' +
+      'aria-haspopup="dialog" aria-label="Ordenar por">' +
+      '<span aria-hidden="true" class="mr-1.5">↕</span>' + esc(label) +
+      '</button>' +
+      '</div>'
+    );
+  }
+
+  function openSortMenu(listKey, hasDates) {
+    sortMenuFor = { listKey: listKey, hasDates: hasDates };
+    var current = activeSort(listKey, hasDates);
+    var html = '<h2 class="font-semibold text-lg tracking-tight mb-2 px-1">Ordenar por</h2>';
+    sortOptions(hasDates).forEach(function (o) {
+      var active = o.key === current;
+      html +=
+        '<button type="button" class="w-full min-h-[48px] px-1 flex items-center gap-3 text-left rounded-xl hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors duration-150" ' +
+        'data-action="choose-sort" data-sort="' + o.key + '"' + (active ? ' aria-pressed="true"' : '') + '>' +
+        '<span class="w-5 text-accent" aria-hidden="true">' + (active ? '✓' : '') + '</span>' +
+        '<span' + (active ? ' class="font-medium"' : '') + '>' + esc(o.label) + '</span>' +
+        '</button>';
+    });
+    $('#sort-panel').html(html);
+    $('#sort-overlay').removeClass('hidden').attr('aria-hidden', 'false');
+  }
+
+  function closeSortMenu() {
+    sortMenuFor = null;
+    $('#sort-overlay').addClass('hidden').attr('aria-hidden', 'true');
+  }
+
+  // ---- Generic single-choice dialog (Google Tasks-style) ----
+  // Used by the editor rows: each attribute opens its own small dialog with
+  // just its choices, instead of a wall of always-visible selects.
+
+  // Callback of the open dialog (null when closed).
+  var chooserOnPick = null;
+
+  function openChooser(title, options, current, onPick) {
+    chooserOnPick = onPick;
+    var html = '<h2 class="font-semibold text-lg tracking-tight mb-2 px-1">' + esc(title) + '</h2>';
+    options.forEach(function (o) {
+      var active = o.value === current;
+      html +=
+        '<button type="button" class="w-full min-h-[48px] px-1 flex items-center gap-3 text-left rounded-xl hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors duration-150" ' +
+        'data-action="choose-option" data-value="' + esc(o.value) + '"' + (active ? ' aria-pressed="true"' : '') + '>' +
+        '<span class="w-5 text-accent shrink-0" aria-hidden="true">' + (active ? '✓' : '') + '</span>' +
+        '<span class="truncate' + (active ? ' font-medium' : '') + '">' + esc(o.label) + '</span>' +
+        '</button>';
+    });
+    $('#chooser-panel').html(html);
+    $('#chooser-overlay').removeClass('hidden').attr('aria-hidden', 'false');
+  }
+
+  function closeChooser() {
+    chooserOnPick = null;
+    $('#chooser-overlay').addClass('hidden').attr('aria-hidden', 'true');
   }
 
   // ---- Views ----
@@ -355,7 +507,8 @@
       : items;
 
     if (visible.length) {
-      html += list(visible);
+      html += sortButton('next', false, visible.length);
+      html += list(sortedItems(visible, 'next', false));
     } else if (items.length) {
       html += emptyState('🔍', 'No hay acciones en este contexto.');
     } else {
@@ -425,14 +578,32 @@
         '</div>';
     }
 
+    // The calendar button lets a new action be created already scheduled
+    // (one step, like the Google Tasks new-task sheet); the chosen day shows
+    // as a removable chip until the action is added.
     html +=
-      '<form id="project-item-form" class="card flex items-center gap-2 px-3 py-2 mb-6" data-project-id="' + project.id + '">' +
-      '<input type="text" id="project-item-input" class="flex-1 min-h-[44px] bg-transparent outline-none px-1 placeholder-stone-400 dark:placeholder-stone-500" placeholder="Añadir próxima acción…" autocomplete="off" />' +
+      '<form id="project-item-form" class="card px-3 py-2 mb-6" data-project-id="' + project.id + '">' +
+      '<div class="flex items-center gap-2">' +
+      '<input type="text" id="project-item-input" class="flex-1 min-w-0 min-h-[44px] bg-transparent outline-none px-1 placeholder-stone-400 dark:placeholder-stone-500" placeholder="Añadir próxima acción…" autocomplete="off" />' +
+      '<button type="button" id="project-item-date" class="w-11 h-11 shrink-0 inline-flex items-center justify-center text-lg" aria-label="Programar para un día" aria-haspopup="dialog">📅</button>' +
       '<button type="submit" class="btn-primary">Añadir</button>' +
+      '</div>' +
+      '<input type="hidden" id="project-item-date-value" />' +
+      '<input type="hidden" id="project-item-time-value" />' +
+      '<div id="project-item-date-chip" class="hidden items-center gap-1 pb-2">' +
+      '<span class="chip" id="project-item-date-label"></span>' +
+      '<button type="button" id="project-item-date-clear" class="btn-ghost" aria-label="Quitar fecha">×</button>' +
+      '</div>' +
       '</form>';
 
-    if (open.length) html += list(open);
-    else html += emptyState('✨', 'Nada pendiente en este proyecto.');
+    // Project steps can mix dated (scheduled) and undated actions, so this
+    // list also offers sorting by date; the preference is shared by all projects.
+    if (open.length) {
+      html += sortButton('project', true, open.length);
+      html += list(sortedItems(open, 'project', true));
+    } else {
+      html += emptyState('✨', 'Nada pendiente en este proyecto.');
+    }
 
     // Project support material (workflow map): reference items filed under this project.
     if (support.length) {
@@ -492,7 +663,8 @@
     var items = model.waitingItems();
     var html = header('A la espera', 'Cosas delegadas o pendientes de otras personas.');
     if (!items.length) return html + emptyState('📮', 'No esperas nada de nadie ahora mismo.');
-    html += list(items);
+    html += sortButton('waiting', false, items.length);
+    html += list(sortedItems(items, 'waiting', false));
     return html;
   }
 
@@ -504,7 +676,8 @@
       return html + emptyState('🌙', 'Nada incubando. Las ideas nuevas pueden esperar aquí.');
     }
     if (items.length) {
-      html += '<ul>' + items.map(function (item) {
+      html += sortButton('someday', false, items.length);
+      html += '<ul>' + sortedItems(items, 'someday', false).map(function (item) {
         return itemRow(item, {
           trailing:
             '<button type="button" class="btn-ghost text-accent shrink-0" data-action="activate" data-id="' + item.id + '">Activar</button>',
@@ -678,7 +851,8 @@
     var items = model.referenceItems();
     var html = header('Referencia', 'Material útil que no requiere acción.');
     if (!items.length) return html + emptyState('📚', 'Sin material de referencia todavía.');
-    html += list(items);
+    html += sortButton('reference', false, items.length);
+    html += list(sortedItems(items, 'reference', false));
     return html;
   }
 
@@ -760,6 +934,18 @@
       '</span>' +
       '<input type="checkbox" id="' + id + '" class="w-6 h-6 shrink-0 accent-accent"' + (checked ? ' checked' : '') + ' />' +
       '</label>'
+    );
+  }
+
+  // One big tappable option (same visual language as the Clarify wizard
+  // choices). attrs is a pre-built string of data-* attributes.
+  function choiceButton(attrs, icon, label, hint) {
+    return (
+      '<button type="button" class="btn-choice" ' + attrs + '>' +
+      '<span class="text-xl w-7 text-center shrink-0" aria-hidden="true">' + icon + '</span>' +
+      '<span class="min-w-0"><span class="block">' + esc(label) + '</span>' +
+      (hint ? '<span class="block text-xs font-normal text-stone-400 dark:text-stone-500">' + esc(hint) + '</span>' : '') +
+      '</span></button>'
     );
   }
 
@@ -935,32 +1121,35 @@
     }
     html += '</div>';
 
-    html += sectionTitle('Sincronización entre dispositivos');
+    html += sectionTitle('Copia de seguridad y sincronización');
     html += '<div class="card px-4 py-4 space-y-3">';
     var syncStatus = global.GTD.syncer.status();
-    // Which setup form (if any) is shown: the picker's choice on a fresh
-    // setup, or the backend being added to an already-configured device.
-    var formProvider = null;
-    if (!syncStatus.configured) {
-      formProvider = syncProvider;
-    } else if (syncAddProvider === 'gdrive' && !syncStatus.hasGdrive) {
-      formProvider = 'gdrive';
-    } else if (syncAddProvider === 'server' && !syncStatus.hasServer) {
-      formProvider = 'server';
-    }
-
     if (syncStatus.configured) {
       // One block per connected backend; both can be active at once and the
       // deterministic merge keeps them convergent (a device connected to
-      // both bridges devices that only use one).
+      // both bridges devices that only use one). Status first, actions next,
+      // the long explanations behind a collapsed details (minimal noise).
       syncStatus.backends.forEach(function (b) {
         var lastText = b.lastSyncAt
           ? 'Última sincronización: ' + model.formatDate(b.lastSyncAt) + '.'
           : 'Aún sin sincronizar.';
-        html += '<div class="space-y-2">';
+        html += '<div class="space-y-2 pb-3 border-b border-stone-100 dark:border-stone-800">';
         if (b.provider === 'gdrive') {
-          html += '<p class="text-sm text-stone-500 dark:text-stone-400">Conectado a tu Google Drive. ' + lastText + '</p>';
+          html += '<p class="font-medium">Google Drive <span class="font-normal text-xs text-stone-400 dark:text-stone-500">· conectado ✓</span></p>';
+          html += '<p class="text-xs text-stone-400 dark:text-stone-500">' + esc(lastText) + '</p>';
+          // The Client ID is not a secret (it travels in the OAuth URL);
+          // surfacing it here feeds the wizard's «Sí, ya lo tengo» shortcut on
+          // the next device — only the passphrase must be retyped there.
           html +=
+            '<p class="text-xs text-stone-400 dark:text-stone-500">' +
+            '¿Otro dispositivo? Abre allí «Conectar Google Drive», elige «Sí, ya lo tengo» y pega este ID ' +
+            '(te pedirá también tu frase de cifrado). ' +
+            '<button type="button" class="btn-ghost" data-action="copy-value" data-value="' + esc(b.clientId || '') + '">Copiar ID</button>' +
+            '</p>';
+          html +=
+            '<details class="text-sm">' +
+            '<summary class="cursor-pointer min-h-[44px] flex items-center text-accent">Más detalles</summary>' +
+            '<div class="space-y-2 pb-2">' +
             '<p class="text-xs text-stone-400 dark:text-stone-500">' +
             'Tus datos se suben cifrados a la carpeta de datos de aplicaciones de tu Google Drive ' +
             '(<code>appDataFolder</code>), que no aparece entre tus archivos. Cada dispositivo guarda ' +
@@ -969,33 +1158,34 @@
             '<a href="https://drive.google.com/drive/settings" target="_blank" rel="noopener" class="text-accent underline">los ajustes de Google Drive en la web</a>. ' +
             'La app móvil de Drive no tiene esa opción: abre el enlace en un navegador (si no aparece, ' +
             'activa «Versión para ordenador»).' +
-            '</p>';
-          html +=
+            '</p>' +
             '<p class="text-xs text-stone-400 dark:text-stone-500">' +
             'Si tu proyecto de Google sigue en modo «Testing», te pedirá autorizar de nuevo cada 7 días; ' +
             'publícalo en producción para evitarlo.' +
-            '</p>';
-          // The Client ID is not a secret (it travels in the OAuth URL);
-          // showing it here saves the trip to the Google console when
-          // connecting another device. The client secret is not shown — copy it
-          // from the Google console again (or export the key file on a server
-          // backend). The passphrase must also be retyped.
+            '</p>' +
+            '</div></details>';
+        } else {
+          html += '<p class="font-medium">Servidor propio <span class="font-normal text-xs text-stone-400 dark:text-stone-500">· conectado ✓</span></p>';
           html +=
             '<p class="text-xs text-stone-400 dark:text-stone-500">' +
-            'Para conectar otro dispositivo usa este mismo ID de cliente (con su secreto y tu frase de cifrado): ' +
-            '<code class="break-all">' + esc(b.clientId || '') + '</code> ' +
-            '<button type="button" class="btn-ghost" data-action="copy-value" data-value="' + esc(b.clientId || '') + '">Copiar</button>' +
+            '<code class="break-all">' + esc(b.serverUrl || '') + '</code> · ' + esc(lastText) +
             '</p>';
-        } else {
           html +=
-            '<p class="text-sm text-stone-500 dark:text-stone-400">Conectado a tu servidor ' +
-            '(<code class="break-all">' + esc(b.serverUrl || '') + '</code>). ' + lastText + '</p>';
+            '<p class="text-xs text-stone-400 dark:text-stone-500">' +
+            '¿Otro dispositivo? Descarga el archivo de llave e impórtalo allí en «Conectar servidor propio»: ' +
+            'lo configura todo sin teclear nada.' +
+            '</p>';
           html +=
+            '<details class="text-sm">' +
+            '<summary class="cursor-pointer min-h-[44px] flex items-center text-accent">Más detalles</summary>' +
+            '<div class="space-y-2 pb-2">' +
             '<p class="text-xs text-stone-400 dark:text-stone-500">' +
             'Cada dispositivo guarda su propio archivo cifrado en el servidor; el de este es ' +
             '<code class="break-all">' + esc(syncStatus.fileName) + '</code>. ' +
-            'El archivo de llave (protegido con contraseña) configura tus otros dispositivos sin teclear nada.' +
-            '</p>';
+            'El archivo de llave (protegido con la contraseña que elijas al descargarlo) contiene la ' +
+            'dirección del servidor, la clave de acceso y tu frase de cifrado.' +
+            '</p>' +
+            '</div></details>';
         }
         html += '<div class="flex flex-wrap gap-2">';
         if (b.provider === 'server') {
@@ -1008,142 +1198,23 @@
       });
       html += '<div class="flex flex-wrap gap-2">';
       html += '<button type="button" class="btn-secondary" data-action="sync-now">Sincronizar ahora</button>';
-      if (!formProvider) {
-        // A second, redundant destination: same encrypted files everywhere.
-        if (!syncStatus.hasGdrive) {
-          html += '<button type="button" class="btn-secondary" data-action="sync-add-backend" data-provider="gdrive">Añadir Google Drive</button>';
-        }
-        if (!syncStatus.hasServer) {
-          html += '<button type="button" class="btn-secondary" data-action="sync-add-backend" data-provider="server">Añadir servidor propio</button>';
-        }
+      // A second, redundant destination: same encrypted files everywhere.
+      if (!syncStatus.hasGdrive) {
+        html += '<button type="button" class="btn-ghost" data-action="sync-setup" data-provider="gdrive">Añadir Google Drive</button>';
+      }
+      if (!syncStatus.hasServer) {
+        html += '<button type="button" class="btn-ghost" data-action="sync-setup" data-provider="server">Añadir servidor propio</button>';
       }
       html += '</div>';
     } else {
       html +=
         '<p class="text-sm text-stone-500 dark:text-stone-400">' +
-        'Opcional: guarda una copia cifrada de tus datos y mantén makeGTD igual en tu móvil, portátil u otros ' +
-        'dispositivos. Los datos se cifran en este dispositivo antes de subirse: el destino nunca puede leerlos. ' +
-        'Puedes activar más de un destino después.' +
+        'Opcional: guarda una copia de seguridad cifrada fuera de este dispositivo y ten lo mismo en tu ' +
+        'móvil, portátil u otros dispositivos. Tus datos se cifran aquí antes de subirse: el destino nunca ' +
+        'puede leerlos.' +
         '</p>';
-      html +=
-        '<label class="block">' +
-        '<span class="block">Dónde guardar la copia</span>' +
-        '<select id="sync-provider-select" class="field mt-1">' +
-        '<option value="gdrive"' + (syncProvider === 'gdrive' ? ' selected' : '') + '>Google Drive (tu cuenta de Google)</option>' +
-        '<option value="server"' + (syncProvider === 'server' ? ' selected' : '') + '>Servidor propio (autoalojado)</option>' +
-        '</select>' +
-        '</label>';
-    }
-    if (formProvider === 'server') {
-        html +=
-          '<p class="text-xs text-stone-400 dark:text-stone-500">' +
-          'Un servidor pequeño y portable que guarda tus copias cifradas. En la carpeta ' +
-          '<a href="https://github.com/leobrines/makegtd/tree/main/server" target="_blank" rel="noopener" class="text-accent underline"><code>server/</code> del proyecto</a> ' +
-          'tienes una implementación de referencia (un solo archivo, sin dependencias) y el protocolo por si ' +
-          'prefieres montar el tuyo (p. ej. sobre S3). Se configura como un proxy: dirección y clave — ' +
-          'o importa el archivo de llave exportado desde otro dispositivo ya conectado.' +
-          '</p>';
-      }
-      if (formProvider === 'gdrive') html +=
-        '<details class="text-sm">' +
-        '<summary class="cursor-pointer min-h-[44px] flex items-center text-accent">Guía: crear tu acceso en Google (una sola vez)</summary>' +
-        '<p class="text-xs text-stone-400 dark:text-stone-500 mt-2 mb-2">' +
-        'Cada enlace abre la página exacta de la consola de Google; inicia sesión con tu cuenta. ' +
-        'Desde el móvil usa el navegador (la app de Google Cloud no permite crear credenciales); ' +
-        'si algo no aparece, activa «Versión para ordenador».' +
-        '</p>' +
-        '<ol class="list-decimal ml-5 space-y-2 text-stone-600 dark:text-stone-300">' +
-        '<li><a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noopener" class="text-accent underline">Crea un proyecto nuevo</a> ' +
-        '(nombre libre, p. ej. «makegtd»).</li>' +
-        '<li><a href="https://console.cloud.google.com/apis/library/drive.googleapis.com" target="_blank" rel="noopener" class="text-accent underline">Habilita la Google Drive API</a> ' +
-        'en ese proyecto (botón «Habilitar»).</li>' +
-        '<li><a href="https://console.cloud.google.com/auth/overview/create" target="_blank" rel="noopener" class="text-accent underline">Registra la app en Google Auth Platform</a>: ' +
-        'nombre de la app, tu correo y público «Externo»/External.</li>' +
-        '<li><a href="https://console.cloud.google.com/auth/clients/create" target="_blank" rel="noopener" class="text-accent underline">Crea el cliente OAuth</a>: ' +
-        'tipo «Aplicación web». En «Orígenes de JavaScript autorizados» añade:<br />' +
-        '<code class="break-all">' + esc(syncStatus.origin) + '</code> ' +
-        '<button type="button" class="btn-ghost" data-action="copy-value" data-value="' + esc(syncStatus.origin) + '">Copiar</button><br />' +
-        'y en «URI de redireccionamiento autorizados» añade:<br />' +
-        '<code class="break-all">' + esc(syncStatus.redirectUri) + '</code> ' +
-        '<button type="button" class="btn-ghost" data-action="copy-value" data-value="' + esc(syncStatus.redirectUri) + '">Copiar</button></li>' +
-        '<li><a href="https://console.cloud.google.com/auth/audience" target="_blank" rel="noopener" class="text-accent underline">Publica la aplicación</a> ' +
-        '(«Publish app»): el permiso que usa makeGTD (solo los datos de la propia app en tu Drive) no es sensible ' +
-        'y no requiere verificación de Google. Si prefieres dejarla en modo «Testing», añade tu correo como usuario ' +
-        'de prueba, pero tendrás que volver a autorizar cada 7 días.</li>' +
-        '<li>Copia el «ID de cliente» (termina en <code>.apps.googleusercontent.com</code>) y el ' +
-        '«Secreto de cliente» y pégalos aquí abajo. Google exige el secreto para el intercambio seguro ' +
-        'del código (PKCE); como es tu propio cliente y solo accede a tu Drive, se guarda únicamente en ' +
-        'este dispositivo. Los cambios en Google pueden tardar unos minutos en activarse.</li>' +
-        '</ol></details>';
-    if (formProvider) {
-      html += '<form id="sync-config-form" class="space-y-3">';
-      if (formProvider === 'gdrive') {
-        html +=
-          '<label class="block">' +
-          '<span class="block">ID de cliente de Google</span>' +
-          '<input type="text" id="sync-client-id" name="client-id" class="field mt-1" placeholder="…apps.googleusercontent.com" autocomplete="off" />' +
-          '</label>';
-        html +=
-          '<label class="block">' +
-          '<span class="block">Secreto de cliente</span>' +
-          '<span class="block text-xs text-stone-400 dark:text-stone-500 mt-0.5 mb-1">' +
-          'El «Secreto de cliente» de ese mismo cliente OAuth. Se guarda solo en este dispositivo ' +
-          '(cifrado si activas la protección del dispositivo).' +
-          '</span>' +
-          '<input type="password" id="sync-client-secret" name="client-secret" class="field" autocomplete="off" />' +
-          '</label>';
-      } else {
-        html +=
-          '<label class="block">' +
-          '<span class="block">Dirección del servidor</span>' +
-          '<input type="text" id="sync-server-url" class="field mt-1" placeholder="https://sync.midominio.com" autocomplete="off" inputmode="url" />' +
-          '</label>';
-        html +=
-          '<label class="block">' +
-          '<span class="block">Clave de acceso</span>' +
-          '<span class="block text-xs text-stone-400 dark:text-stone-500 mt-0.5 mb-1">' +
-          'La clave con la que arrancaste el servidor (<code>ACCESS_KEY</code>).' +
-          '</span>' +
-          '<input type="password" id="sync-server-key" class="field" autocomplete="off" />' +
-          '</label>';
-        html +=
-          '<label class="btn-secondary cursor-pointer inline-block">Importar archivo de llave…' +
-          '<input type="file" id="sync-keyfile-input" accept="application/json,.json" class="hidden" />' +
-          '</label>';
-      }
-      // Hidden username so password managers (Bitwarden, Chrome…) save the
-      // generated passphrase as a complete credential for this origin.
-      html += '<input type="hidden" name="username" value="makeGTD" autocomplete="username" />';
-      if (!syncStatus.configured) {
-        html +=
-          '<label class="block">' +
-          '<span class="block">Frase de cifrado</span>' +
-          '<span class="block text-xs text-stone-400 dark:text-stone-500 mt-0.5 mb-1">' +
-          'Una contraseña que inventas tú: con ella se cifran tus datos en este dispositivo ' +
-          'antes de subirse. Elige una larga —varias palabras que recuerdes— o genera una segura con el ' +
-          'botón y guárdala en tu gestor de contraseñas. Tendrás que escribir la misma en cada dispositivo que ' +
-          'conectes. No se puede recuperar: si la olvidas, la copia remota será ilegible (tus dispositivos ' +
-          'conservan sus datos).' +
-          '</span>' +
-          '<span class="flex gap-2">' +
-          '<input type="password" id="sync-passphrase" name="passphrase" class="field flex-1" autocomplete="new-password" />' +
-          '<button type="button" class="btn-secondary shrink-0" data-action="sync-generate-passphrase">Generar</button>' +
-          '<button type="button" class="btn-ghost shrink-0" data-action="toggle-passphrase" aria-pressed="false">Mostrar</button>' +
-          '</span>' +
-          '</label>';
-      }
-      // Adding a second destination reuses the stored passphrase: the
-      // encrypted files must be identical on every backend.
-      html += '<div class="flex flex-wrap gap-2">';
-      html +=
-        '<button type="submit" class="btn-primary">' +
-        (formProvider === 'gdrive' ? 'Guardar y conectar con Google' : 'Guardar y sincronizar') +
-        '</button>';
-      if (syncStatus.configured) {
-        html += '<button type="button" class="btn-ghost" data-action="sync-add-cancel">Cancelar</button>';
-      }
-      html += '</div>';
-      html += '</form>';
+      html += choiceButton('data-action="sync-setup" data-provider="gdrive"', '☁️', 'Conectar Google Drive', 'Con tu cuenta de Google. Te guía paso a paso.');
+      html += choiceButton('data-action="sync-setup" data-provider="server"', '🖥️', 'Conectar servidor propio', 'Con un servidor tuyo (opción avanzada).');
     }
     html += '</div>';
 
@@ -1167,16 +1238,296 @@
     return html;
   }
 
+  // ---- Sync setup wizard (modal, one step at a time) ----
+
+  // The wizard connects one backup destination through small screens with a
+  // single decision or action each (ADHD principle: one decision at a time).
+  // Null while closed. Values typed on earlier steps live here so moving back
+  // and forward never loses them. path records the branch chosen on the first
+  // screen: 'have-id' | 'guide' (Google Drive), 'manual' | 'keyfile' (server).
+  var syncWizard = null; // { provider, step, path, clientId, serverUrl, serverKey, passphrase, passFromFile }
+
+  // Browser-history integration (see js/process.js for the reference
+  // pattern): opening the wizard and every forward step push a history entry,
+  // so the hardware/browser back button undoes exactly one step — and closes
+  // the modal from the first one — instead of leaving the Settings view.
+  var SYNC_WIZARD_SESSION = 'sw-' + Date.now().toString(36) + Math.random().toString(36).slice(2);
+  var syncWizardDepth = 0; // wizard entries pushed above the base #/ajustes entry
+  var syncWizardUnwinding = false; // swallow the popstate fired by our own history.go() cleanup
+
+  // Ordered step list for the current provider and chosen path. The
+  // passphrase step only exists while no backend is configured yet: adding a
+  // second destination reuses the stored passphrase (the encrypted files must
+  // be identical on every backend). A key file may carry the passphrase too.
+  function syncWizardSteps() {
+    var fresh = !global.GTD.syncer.status().configured;
+    var steps = ['start'];
+    if (syncWizard.provider === 'gdrive') {
+      if (syncWizard.path === 'guide') steps = steps.concat(['g-project', 'g-api', 'g-register', 'g-client', 'g-publish']);
+      steps.push('client-id');
+      if (fresh) steps.push('passphrase');
+    } else {
+      if (syncWizard.path === 'manual') steps.push('server-data');
+      if (fresh && !(syncWizard.path === 'keyfile' && syncWizard.passFromFile)) steps.push('passphrase');
+    }
+    steps.push('connect');
+    return steps;
+  }
+
+  function openSyncWizard(provider) {
+    syncWizard = { provider: provider, step: 'start', path: null, clientId: '', clientSecret: '', serverUrl: '', serverKey: '', passphrase: '', passFromFile: false };
+    syncWizardDepth = 1;
+    global.history.pushState({ swSession: SYNC_WIZARD_SESSION, swStep: 'start', swPath: null, swDepth: 1 }, '');
+    $('#sync-wizard-overlay').removeClass('hidden').attr('aria-hidden', 'false');
+    renderSyncWizard();
+  }
+
+  // Forward step: push a history entry tagged with enough context to restore it.
+  function syncWizardGo(step) {
+    syncWizard.step = step;
+    syncWizardDepth += 1;
+    global.history.pushState(
+      { swSession: SYNC_WIZARD_SESSION, swStep: step, swPath: syncWizard.path, swDepth: syncWizardDepth },
+      ''
+    );
+    renderSyncWizard();
+  }
+
+  // viaHistory: the wizard's entries were already popped by the hardware back
+  // button, so there is nothing left to unwind.
+  function closeSyncWizard(viaHistory) {
+    if (!syncWizard) return;
+    syncWizard = null;
+    $('#sync-wizard-overlay').addClass('hidden').attr('aria-hidden', 'true');
+    if (!viaHistory && syncWizardDepth > 0) {
+      syncWizardUnwinding = true;
+      global.history.go(-syncWizardDepth);
+    }
+    syncWizardDepth = 0;
+  }
+
+  // Last wizard step: persist the config and run the first sync (on Google
+  // Drive it triggers the OAuth consent redirect).
+  function finishSyncWizard() {
+    var gdrive = syncWizard.provider === 'gdrive';
+    var ok = gdrive
+      ? global.GTD.syncer.setGdriveConfig(syncWizard.clientId, syncWizard.clientSecret, syncWizard.passphrase)
+      : global.GTD.syncer.setServerConfig(syncWizard.serverUrl, syncWizard.serverKey, syncWizard.passphrase);
+    if (!ok) {
+      toast(gdrive
+        ? 'Revisa el ID de cliente y la frase de cifrado'
+        : 'Revisa la dirección del servidor, la clave y la frase de cifrado');
+      return;
+    }
+    closeSyncWizard(false);
+    refresh();
+    syncNow();
+  }
+
+  function renderSyncWizard() {
+    if (!syncWizard) return;
+    var status = global.GTD.syncer.status();
+    var steps = syncWizardSteps();
+    var index = steps.indexOf(syncWizard.step);
+    var gdrive = syncWizard.provider === 'gdrive';
+
+    // text may carry inline markup (links, <code>); escape interpolations at
+    // the call sites.
+    function p(text) {
+      return '<p class="text-sm text-stone-500 dark:text-stone-400">' + text + '</p>';
+    }
+
+    function hint(text) {
+      return '<p class="text-xs text-stone-400 dark:text-stone-500">' + text + '</p>';
+    }
+
+    // The one external action of a guide step: a big link into the exact
+    // Google console page.
+    function consoleLink(href, label) {
+      return '<a href="' + href + '" target="_blank" rel="noopener" class="btn-secondary w-full">' + esc(label) + ' ↗</a>';
+    }
+
+    function copyRow(label, value) {
+      return (
+        '<div class="text-xs text-stone-500 dark:text-stone-400">' +
+        '<span class="block mb-1">' + esc(label) + ':</span>' +
+        '<span class="flex items-center gap-1">' +
+        '<code class="break-all flex-1 min-w-0">' + esc(value) + '</code>' +
+        '<button type="button" class="btn-ghost shrink-0" data-action="copy-value" data-value="' + esc(value) + '">Copiar</button>' +
+        '</span></div>'
+      );
+    }
+
+    var html =
+      '<button id="sync-wizard-close" type="button" aria-label="Cerrar" ' +
+      'class="absolute top-1 right-1 w-11 h-11 flex items-center justify-center text-2xl leading-none text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300 transition-colors duration-150">&times;</button>';
+    html +=
+      '<h2 id="sync-wizard-title" class="font-semibold text-lg tracking-tight pr-8">' +
+      (gdrive ? 'Conectar Google Drive' : 'Conectar servidor propio') +
+      '</h2>';
+    // No progress on the first screen: the total depends on the branch chosen there.
+    if (syncWizard.path !== null) {
+      html += '<p class="text-xs text-stone-400 dark:text-stone-500 mt-0.5">Paso ' + (index + 1) + ' de ' + steps.length + '</p>';
+    }
+    html += '<form id="sync-wizard-form" class="mt-4 space-y-3">';
+    // Hidden username so password managers (Bitwarden, Chrome…) save the
+    // passphrase as a complete credential for this origin.
+    html += '<input type="hidden" name="username" value="makeGTD" autocomplete="username" />';
+
+    var continueLabel = 'Continuar';
+    switch (syncWizard.step) {
+      case 'start':
+        if (gdrive) {
+          html += p(
+            'Tu copia cifrada se guarda en tu propio Google Drive y mantiene tus dispositivos ' +
+            'sincronizados. Google no puede leerla: se cifra aquí antes de subirse.'
+          );
+          html += '<p class="font-medium pt-1">¿Tienes ya un ID de cliente de Google?</p>';
+          html += choiceButton('data-action="sw-choice" data-choice="have-id"', '🔑', 'Sí, ya lo tengo', 'De otro dispositivo ya conectado. Solo hay que pegarlo.');
+          html += choiceButton('data-action="sw-choice" data-choice="guide"', '🧭', 'No, crearlo ahora', 'Guía paso a paso por la consola de Google. Se hace una sola vez.');
+        } else {
+          html += p(
+            'Un servidor pequeño y tuyo guarda las copias cifradas. En la carpeta ' +
+            '<a href="https://github.com/leobrines/makegtd/tree/main/server" target="_blank" rel="noopener" class="text-accent underline"><code>server/</code> del proyecto</a> ' +
+            'tienes una implementación de referencia y el protocolo.'
+          );
+          html += '<p class="font-medium pt-1">¿Cómo quieres configurar este dispositivo?</p>';
+          // A label, not a button: tapping it opens the file picker directly.
+          html +=
+            '<label class="btn-choice cursor-pointer">' +
+            '<span class="text-xl w-7 text-center shrink-0" aria-hidden="true">🗝️</span>' +
+            '<span class="min-w-0"><span class="block">Importar archivo de llave</span>' +
+            '<span class="block text-xs font-normal text-stone-400 dark:text-stone-500">Exportado desde otro dispositivo ya conectado. Lo configura todo por ti.</span></span>' +
+            '<input type="file" id="sync-keyfile-input" accept="application/json,.json" class="hidden" />' +
+            '</label>';
+          html += choiceButton('data-action="sw-choice" data-choice="manual"', '⌨️', 'Escribir los datos a mano', 'La dirección del servidor y su clave de acceso.');
+        }
+        continueLabel = null;
+        break;
+
+      case 'g-project':
+        html += p('Tu acceso vive en un «proyecto» de Google. Crea uno nuevo; el nombre da igual (p. ej. «makegtd»).');
+        html += consoleLink('https://console.cloud.google.com/projectcreate', 'Abrir «Crear proyecto»');
+        html += hint('Inicia sesión con tu cuenta de Google. Desde el móvil usa el navegador; si algo no aparece, activa «Versión para ordenador».');
+        continueLabel = 'Ya lo creé';
+        break;
+
+      case 'g-api':
+        html += p('En la página que se abre, pulsa el botón «Habilitar» (Enable).');
+        html += consoleLink('https://console.cloud.google.com/apis/library/drive.googleapis.com', 'Abrir «Google Drive API»');
+        continueLabel = 'Ya está habilitada';
+        break;
+
+      case 'g-register':
+        html += p('Registra la app: un nombre (p. ej. «makegtd»), tu correo, y elige público «Externo» (External).');
+        html += consoleLink('https://console.cloud.google.com/auth/overview/create', 'Abrir el registro de la app');
+        continueLabel = 'Ya la registré';
+        break;
+
+      case 'g-client':
+        html += p('Crea el cliente de tipo «Aplicación web» y pega estos dos valores en sus campos:');
+        html += copyRow('En «Orígenes de JavaScript autorizados»', status.origin);
+        html += copyRow('En «URI de redireccionamiento autorizados»', status.redirectUri);
+        html += consoleLink('https://console.cloud.google.com/auth/clients/create', 'Abrir «Crear cliente»');
+        continueLabel = 'Ya lo creé';
+        break;
+
+      case 'g-publish':
+        html += p(
+          'Pulsa «Publicar aplicación» (Publish app). El permiso que usa makeGTD —solo los datos de ' +
+          'la propia app en tu Drive— no es sensible y no requiere verificación de Google.'
+        );
+        html += hint('Si prefieres dejarla en modo «Testing», añade tu correo como usuario de prueba; tendrás que volver a autorizar cada 7 días.');
+        html += consoleLink('https://console.cloud.google.com/auth/audience', 'Abrir «Publicar aplicación»');
+        continueLabel = 'Hecho';
+        break;
+
+      case 'client-id':
+        html += p(
+          syncWizard.path === 'have-id'
+            ? 'Pega el «ID de cliente» (lo copias en tu otro dispositivo desde Ajustes → Google Drive) y su «Secreto de cliente» (de la consola de Google).'
+            : 'Copia el «ID de cliente» y el «Secreto de cliente» que te muestra Google y pégalos aquí. Los cambios pueden tardar unos minutos en activarse.'
+        );
+        html +=
+          '<label class="block">' +
+          '<span class="block">ID de cliente de Google</span>' +
+          '<span class="block text-xs text-stone-400 dark:text-stone-500 mt-0.5 mb-1">Termina en <code>.apps.googleusercontent.com</code>.</span>' +
+          '<input type="text" id="sync-client-id" class="field" value="' + esc(syncWizard.clientId) + '" placeholder="…apps.googleusercontent.com" autocomplete="off" />' +
+          '</label>';
+        html +=
+          '<label class="block">' +
+          '<span class="block">Secreto de cliente</span>' +
+          '<span class="block text-xs text-stone-400 dark:text-stone-500 mt-0.5 mb-1">Del mismo cliente OAuth. Google lo exige para el intercambio seguro del código (PKCE); se guarda solo en este dispositivo.</span>' +
+          '<input type="password" id="sync-client-secret" class="field" value="' + esc(syncWizard.clientSecret) + '" autocomplete="off" />' +
+          '</label>';
+        break;
+
+      case 'server-data':
+        html +=
+          '<label class="block">' +
+          '<span class="block">Dirección del servidor</span>' +
+          '<input type="text" id="sync-server-url" class="field mt-1" value="' + esc(syncWizard.serverUrl) + '" placeholder="https://sync.midominio.com" autocomplete="off" inputmode="url" />' +
+          '</label>';
+        html +=
+          '<label class="block">' +
+          '<span class="block">Clave de acceso</span>' +
+          '<span class="block text-xs text-stone-400 dark:text-stone-500 mt-0.5 mb-1">La clave con la que arrancaste el servidor (<code>ACCESS_KEY</code>).</span>' +
+          '<input type="password" id="sync-server-key" class="field" value="' + esc(syncWizard.serverKey) + '" autocomplete="off" />' +
+          '</label>';
+        break;
+
+      case 'passphrase':
+        html += p(
+          'Inventa una frase de cifrado: con ella se cifran tus datos en este dispositivo antes de ' +
+          'subirse. Escribirás <strong>la misma</strong> en cada dispositivo que conectes.'
+        );
+        html +=
+          '<label class="block">' +
+          '<span class="block">Frase de cifrado</span>' +
+          '<span class="flex gap-2 mt-1">' +
+          '<input type="password" id="sync-passphrase" name="passphrase" class="field flex-1" value="' + esc(syncWizard.passphrase) + '" autocomplete="new-password" />' +
+          '<button type="button" class="btn-secondary shrink-0" data-action="sync-generate-passphrase">Generar</button>' +
+          '<button type="button" class="btn-ghost shrink-0" data-action="toggle-passphrase" aria-pressed="false">Mostrar</button>' +
+          '</span>' +
+          '</label>';
+        html += hint('No se puede recuperar: guárdala en tu gestor de contraseñas. Si la olvidas, la copia remota será ilegible (tus dispositivos conservan sus datos).');
+        break;
+
+      case 'connect':
+        if (gdrive) {
+          html += p(
+            'Todo listo. Al continuar irás a Google para autorizar el acceso: elige tu cuenta y ' +
+            'acepta. Volverás aquí automáticamente y se hará la primera sincronización.'
+          );
+          continueLabel = 'Conectar con Google';
+        } else {
+          html += p(
+            'Todo listo. Se guardará la configuración y se hará la primera sincronización con ' +
+            '<code class="break-all">' + esc(syncWizard.serverUrl) + '</code>.'
+          );
+          if (syncWizard.passFromFile) {
+            html += hint('La frase de cifrado venía en el archivo de llave: no hay que teclear nada más.');
+          }
+          continueLabel = 'Guardar y sincronizar';
+        }
+        break;
+    }
+
+    if (continueLabel) {
+      html += '<div class="flex items-center gap-2 pt-1">';
+      if (index > 0) html += '<button type="button" class="btn-ghost" data-action="sw-back">‹ Volver</button>';
+      html += '<button type="submit" class="btn-primary ml-auto">' + esc(continueLabel) + '</button>';
+      html += '</div>';
+    } else if (index > 0) {
+      html += '<button type="button" class="btn-ghost" data-action="sw-back">‹ Volver atrás</button>';
+    }
+    html += '</form>';
+    $('#sync-wizard').html(html);
+  }
+
   // ---- Event wiring (delegated once) ----
 
   var currentContextFilter = '';
-
-  // Provider selected in the sync setup form (before it is configured).
-  var syncProvider = 'gdrive';
-
-  // Backend being added from an already-configured device ('gdrive',
-  // 'server' or null when no add-form is open).
-  var syncAddProvider = null;
 
   function bind() {
     var $view = $('#view');
@@ -1231,9 +1582,133 @@
     });
 
     // Show/hide the waiting-for field as status changes inside the editor.
+    // Choosing "Programada" with no date jumps straight into the picker: a
+    // scheduled item without a day would silently fall back to Next on save.
     $view.on('change', '[data-field="status"]', function () {
       var $editor = $(this).closest('[data-editor-for]');
       $editor.find('[data-field="waitingFor"]').toggle($(this).val() === model.STATUS.WAITING);
+      if ($(this).val() === model.STATUS.SCHEDULED && !$editor.find('[data-field="date"]').val()) {
+        $editor.find('[data-action="pick-date"]').trigger('click');
+      }
+    });
+
+    // Editor attribute rows: each one opens its own dialog with its choices.
+    $view.on('click', '[data-action="edit-attr"]', function () {
+      var attr = $(this).data('attr');
+      var $editor = $(this).closest('[data-editor-for]');
+      var current = $editor.find('[data-field="' + attr + '"]').val();
+
+      function apply(value, label) {
+        $editor.find('[data-field="' + attr + '"]').val(value);
+        $editor.find('[data-role="' + attr + '-label"]')
+          .text(label)
+          .removeClass('text-stone-400 dark:text-stone-500');
+        $editor.find('[data-action="clear-attr"][data-attr="' + attr + '"]').show();
+      }
+
+      if (attr === 'status') {
+        openChooser('Lista', statusChoices(current), current, function (value) {
+          apply(value, model.STATUS_LABELS[value]);
+          $editor.find('[data-field="status"]').trigger('change');
+        });
+        return;
+      }
+      if (attr === 'projectId') {
+        openChooser(
+          'Proyecto',
+          model.activeProjects().map(function (p) { return { value: p.id, label: p.name }; }),
+          current,
+          function (value) {
+            var project = store.getProject(value);
+            apply(value, project ? project.name : value);
+          }
+        );
+        return;
+      }
+      if (attr === 'context') {
+        openChooser(
+          'Contexto',
+          store.getContexts().map(function (c) { return { value: c, label: c }; }),
+          current,
+          function (value) { apply(value, value); }
+        );
+        return;
+      }
+      // Engage criteria (estimate/energy/priority): choices come from the
+      // user-edited value lists; a stored value no longer in its list stays
+      // choosable until changed.
+      var values = { estimate: model.timeEstimates(), energy: model.energyLevels(), priority: model.priorities() }[attr];
+      var titles = { estimate: 'Tiempo estimado', energy: 'Nivel de energía', priority: 'Prioridad' };
+      var options = values.map(function (v) { return { value: v, label: v }; });
+      if (current && values.indexOf(current) === -1) options.push({ value: current, label: current });
+      openChooser(titles[attr], options, current, function (value) { apply(value, value); });
+    });
+
+    $view.on('click', '[data-action="clear-attr"]', function () {
+      var attr = $(this).data('attr');
+      var $editor = $(this).closest('[data-editor-for]');
+      $editor.find('[data-field="' + attr + '"]').val('');
+      $editor.find('[data-role="' + attr + '-label"]')
+        .text(ATTR_ADD_LABELS[attr])
+        .addClass('text-stone-400 dark:text-stone-500');
+      $(this).hide();
+    });
+
+    $view.on('click', '[data-action="show-notes"]', function () {
+      var $editor = $(this).closest('[data-editor-for]');
+      $(this).addClass('hidden');
+      $editor.find('[data-field="notes"]').removeClass('hidden').trigger('focus');
+    });
+
+    $('#chooser-panel').on('click', '[data-action="choose-option"]', function () {
+      var onPick = chooserOnPick;
+      var value = $(this).attr('data-value');
+      closeChooser();
+      if (onPick) onPick(value);
+    });
+
+    $('#chooser-overlay').on('click', function (e) {
+      if (e.target === this) closeChooser();
+    });
+
+    $(document).on('keydown', function (e) {
+      if (e.key === 'Escape') closeChooser();
+    });
+
+    // Date picker dialog for the inline editor. Choosing a day turns the item
+    // into a scheduled one (setup guide calendar rule: a date means it must
+    // happen that day); clearing it sends it back to Next Actions.
+    $view.on('click', '[data-action="pick-date"]', function () {
+      var $editor = $(this).closest('[data-editor-for]');
+      global.GTD.datepicker.open({
+        date: $editor.find('[data-field="date"]').val() || null,
+        time: $editor.find('[data-field="time"]').val() || null,
+        onDone: function (date, time) {
+          $editor.find('[data-field="date"]').val(date);
+          $editor.find('[data-field="time"]').val(time || '');
+          $editor.find('[data-field="status"]').val(model.STATUS.SCHEDULED).trigger('change');
+          $editor.find('[data-role="status-label"]').text(model.STATUS_LABELS[model.STATUS.SCHEDULED]);
+          $editor.find('[data-role="date-label"]')
+            .text(model.formatDate(date) + (time && model.timeFieldEnabled() ? ' · ' + time : ''))
+            .removeClass('text-stone-400 dark:text-stone-500');
+          $editor.find('[data-action="clear-date"]').show();
+        },
+      });
+    });
+
+    $view.on('click', '[data-action="clear-date"]', function () {
+      var $editor = $(this).closest('[data-editor-for]');
+      $editor.find('[data-field="date"]').val('');
+      $editor.find('[data-field="time"]').val('');
+      var $status = $editor.find('[data-field="status"]');
+      if ($status.val() === model.STATUS.SCHEDULED) {
+        $status.val(model.STATUS.NEXT).trigger('change');
+        $editor.find('[data-role="status-label"]').text(model.STATUS_LABELS[model.STATUS.NEXT]);
+      }
+      $editor.find('[data-role="date-label"]')
+        .text(model.timeFieldEnabled() ? 'Agregar fecha/hora' : 'Agregar fecha')
+        .addClass('text-stone-400 dark:text-stone-500');
+      $(this).hide();
     });
 
     $view.on('click', '[data-action="delete"]', function () {
@@ -1274,6 +1749,26 @@
     $view.on('click', '[data-action="filter-context"]', function () {
       currentContextFilter = $(this).data('context') || '';
       refresh();
+    });
+
+    // "Ordenar por" menu.
+    $view.on('click', '[data-action="open-sort"]', function () {
+      openSortMenu($(this).data('list-key'), !!$(this).data('has-dates'));
+    });
+
+    $('#sort-panel').on('click', '[data-action="choose-sort"]', function () {
+      if (!sortMenuFor) return;
+      model.setSortPref(sortMenuFor.listKey, $(this).data('sort'));
+      closeSortMenu();
+      refresh();
+    });
+
+    $('#sort-overlay').on('click', function (e) {
+      if (e.target === this) closeSortMenu();
+    });
+
+    $(document).on('keydown', function (e) {
+      if (e.key === 'Escape') closeSortMenu();
     });
 
     // Help popup: what a "context" is (triggers live in Settings and the Clarify wizard).
@@ -1392,9 +1887,39 @@
       var projectId = $(this).data('project-id');
       var title = $('#project-item-input').val().trim();
       if (!title) return;
-      store.addItem({ title: title, status: model.STATUS.NEXT, projectId: projectId });
+      var fields = { title: title, status: model.STATUS.NEXT, projectId: projectId };
+      // A chosen day makes the new action calendar-bound from the start
+      // (setup guide calendar rule: only day-specific actions carry a date).
+      var date = $('#project-item-date-value').val();
+      if (date) {
+        fields.status = model.STATUS.SCHEDULED;
+        fields.date = date;
+        fields.time = $('#project-item-time-value').val() || null;
+      }
+      store.addItem(fields);
       refresh();
       $('#project-item-input').trigger('focus');
+    });
+
+    $view.on('click', '#project-item-date', function () {
+      global.GTD.datepicker.open({
+        date: $('#project-item-date-value').val() || null,
+        time: $('#project-item-time-value').val() || null,
+        onDone: function (date, time) {
+          $('#project-item-date-value').val(date);
+          $('#project-item-time-value').val(time || '');
+          $('#project-item-date-label').text(
+            '📅 ' + model.formatDate(date) + (time && model.timeFieldEnabled() ? ' · ' + time : '')
+          );
+          $('#project-item-date-chip').removeClass('hidden').addClass('flex');
+        },
+      });
+    });
+
+    $view.on('click', '#project-item-date-clear', function () {
+      $('#project-item-date-value').val('');
+      $('#project-item-time-value').val('');
+      $('#project-item-date-chip').addClass('hidden').removeClass('flex');
     });
 
     $view.on('change', '#project-name', function () {
@@ -1668,62 +2193,8 @@
 
     // ---- Sync (provider-agnostic, via GTD.syncer) ----
 
-    function syncNow() {
-      toast('Sincronizando…');
-      global.GTD.syncer
-        .sync()
-        .then(function (result) {
-          // {redirecting: true} means the page is leaving for Google's
-          // consent screen; the flow resumes at boot after the redirect.
-          if (!result || result.redirecting) return;
-          if (result.ok) {
-            toast('Sincronizado ✅');
-          } else {
-            var failed = result.results.filter(function (r) {
-              return !r.ok;
-            })[0];
-            toast(syncBackendLabel(failed.provider) + ': ' + syncErrorMessage(failed.error));
-          }
-          refresh();
-        })
-        .catch(function (err) {
-          toast(syncErrorMessage(err));
-        });
-    }
-
-    $view.on('change', '#sync-provider-select', function () {
-      syncProvider = $(this).val();
-      refresh();
-    });
-
-    $view.on('submit', '#sync-config-form', function (e) {
-      e.preventDefault();
-      // The passphrase field only exists on a fresh setup; when adding a
-      // second backend the stored passphrase is reused (empty value).
-      var passphrase = $('#sync-passphrase').val() || '';
-      if ($('#sync-client-id').length) {
-        if (!global.GTD.syncer.setGdriveConfig($('#sync-client-id').val(), $('#sync-client-secret').val(), passphrase)) {
-          toast('Faltan el ID de cliente o la frase de cifrado');
-          return;
-        }
-      } else if (
-        !global.GTD.syncer.setServerConfig($('#sync-server-url').val(), $('#sync-server-key').val(), passphrase)
-      ) {
-        toast('Revisa la dirección del servidor, la clave y la frase de cifrado');
-        return;
-      }
-      syncAddProvider = null;
-      syncNow(); // On Google Drive, the first sync triggers the consent redirect.
-    });
-
-    $view.on('click', '[data-action="sync-add-backend"]', function () {
-      syncAddProvider = $(this).data('provider');
-      refresh();
-    });
-
-    $view.on('click', '[data-action="sync-add-cancel"]', function () {
-      syncAddProvider = null;
-      refresh();
+    $view.on('click', '[data-action="sync-setup"]', function () {
+      openSyncWizard($(this).data('provider'));
     });
 
     $view.on('click', '[data-action="sync-remove-backend"]', function () {
@@ -1737,47 +2208,7 @@
       refresh();
     });
 
-    $view.on('click', '[data-action="toggle-passphrase"]', function () {
-      var $input = $('#sync-passphrase');
-      var show = $input.attr('type') === 'password';
-      $input.attr('type', show ? 'text' : 'password');
-      $(this).text(show ? 'Ocultar' : 'Mostrar').attr('aria-pressed', String(show));
-    });
-
     $view.on('click', '[data-action="sync-now"]', syncNow);
-
-    // Key file import: fills the server form from a (usually encrypted)
-    // key file exported on an already-configured device.
-    $view.on('change', '#sync-keyfile-input', function () {
-      var input = this;
-      var file = input.files && input.files[0];
-      if (!file) return;
-      var reader = new FileReader();
-      reader.onload = function () {
-        var text = String(reader.result);
-        var password = '';
-        if (global.GTD.crypto.isEnvelope(text)) {
-          password = global.prompt('Contraseña del archivo de llave:');
-          if (password === null) return;
-        }
-        global.GTD.syncer
-          .importKeyFile(text, password)
-          .then(function (data) {
-            $('#sync-server-url').val(data.url);
-            $('#sync-server-key').val(data.key);
-            // The passphrase field only exists on a fresh setup; when adding
-            // a backend the stored passphrase is reused instead.
-            if (data.passphrase && $('#sync-passphrase').length) $('#sync-passphrase').val(data.passphrase);
-            input.value = '';
-            toast('Archivo de llave importado: revisa y pulsa guardar');
-          })
-          .catch(function (err) {
-            input.value = '';
-            toast(err && err.message === 'decrypt-failed' ? 'Contraseña del archivo incorrecta' : 'El archivo de llave no es válido');
-          });
-      };
-      reader.readAsText(file);
-    });
 
     $view.on('click', '[data-action="sync-export-key"]', function () {
       var password = global.prompt('Elige una contraseña para proteger el archivo de llave (te la pedirá al importarlo):');
@@ -1800,20 +2231,14 @@
         });
     });
 
-    // Fills the field with a strong random phrase (~79 bits; confusable
-    // characters excluded) and reveals it so the user can write it down.
-    $view.on('click', '[data-action="sync-generate-passphrase"]', function () {
-      $('#sync-passphrase').attr('type', 'text').val(randomPassphrase());
-      $view.find('[data-action="toggle-passphrase"]').text('Ocultar').attr('aria-pressed', 'true');
-      toast('Frase generada: guárdala antes de continuar');
-    });
-
     $view.on('click', '[data-action="copy-ai-prompt"]', function () {
       var key = $(this).data('prompt');
       if (key === 'horizons-review') copyToClipboard(buildHorizonsReviewPrompt());
     });
 
-    $view.on('click', '[data-action="copy-value"]', function () {
+    // Document-level: copy buttons live both in the Settings view and inside
+    // the sync wizard modal (which is outside #view).
+    $(document).on('click', '[data-action="copy-value"]', function () {
       var value = String($(this).data('value'));
       if (global.navigator.clipboard && global.navigator.clipboard.writeText) {
         global.navigator.clipboard.writeText(value).then(
@@ -1828,6 +2253,189 @@
         global.prompt('Copia este valor:', value);
       }
     });
+
+    // ---- Sync setup wizard events (the modal lives outside #view) ----
+
+    var $wizard = $('#sync-wizard-overlay');
+
+    $wizard.on('click', '#sync-wizard-close', function () {
+      closeSyncWizard(false);
+    });
+
+    $wizard.on('click', function (e) {
+      if (e.target === this) closeSyncWizard(false);
+    });
+
+    $(document).on('keydown', function (e) {
+      if (e.key === 'Escape') closeSyncWizard(false);
+    });
+
+    // First-screen branch: each choice decides which steps follow.
+    $wizard.on('click', '[data-action="sw-choice"]', function () {
+      var choice = $(this).data('choice');
+      if (choice === 'have-id') {
+        syncWizard.path = 'have-id';
+        syncWizardGo('client-id');
+      } else if (choice === 'guide') {
+        syncWizard.path = 'guide';
+        syncWizardGo('g-project');
+      } else if (choice === 'manual') {
+        syncWizard.path = 'manual';
+        syncWizardGo('server-data');
+      }
+    });
+
+    $wizard.on('click', '[data-action="sw-back"]', function () {
+      // Same code path as the hardware back button: pop the history entry
+      // and let the popstate handler restore the previous step.
+      if (syncWizardDepth > 1) global.history.back();
+    });
+
+    // Continue: validate and store the current step's input, then advance.
+    $wizard.on('submit', '#sync-wizard-form', function (e) {
+      e.preventDefault();
+      if (!syncWizard) return;
+      var steps = syncWizardSteps();
+      var step = syncWizard.step;
+      if (step === 'client-id') {
+        var clientId = $('#sync-client-id').val().trim();
+        var clientSecret = $('#sync-client-secret').val().trim();
+        if (!clientId || !clientSecret) {
+          toast('Pega tu ID y tu secreto de cliente para continuar');
+          return;
+        }
+        syncWizard.clientId = clientId;
+        syncWizard.clientSecret = clientSecret;
+      } else if (step === 'server-data') {
+        var url = $('#sync-server-url').val();
+        var key = $('#sync-server-key').val().trim();
+        if (!global.GTD.syncer._pure.normalizeServerUrl(url)) {
+          toast('Revisa la dirección del servidor');
+          return;
+        }
+        if (!key) {
+          toast('Falta la clave de acceso');
+          return;
+        }
+        syncWizard.serverUrl = url.trim();
+        syncWizard.serverKey = key;
+      } else if (step === 'passphrase') {
+        var phrase = $('#sync-passphrase').val();
+        if (!phrase) {
+          toast('Escribe o genera tu frase de cifrado');
+          return;
+        }
+        syncWizard.passphrase = phrase;
+      } else if (step === 'connect') {
+        finishSyncWizard();
+        return;
+      }
+      syncWizardGo(steps[steps.indexOf(step) + 1]);
+    });
+
+    // Key file import (server first screen): configures everything at once
+    // and jumps ahead — to the passphrase step only if the file lacks one.
+    $wizard.on('change', '#sync-keyfile-input', function () {
+      var input = this;
+      var file = input.files && input.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function () {
+        var text = String(reader.result);
+        var password = '';
+        if (global.GTD.crypto.isEnvelope(text)) {
+          password = global.prompt('Contraseña del archivo de llave:');
+          if (password === null) return;
+        }
+        global.GTD.syncer
+          .importKeyFile(text, password)
+          .then(function (data) {
+            input.value = '';
+            if (!syncWizard) return;
+            syncWizard.path = 'keyfile';
+            syncWizard.serverUrl = data.url;
+            syncWizard.serverKey = data.key;
+            if (!global.GTD.syncer.status().configured && data.passphrase) {
+              syncWizard.passphrase = data.passphrase;
+              syncWizard.passFromFile = true;
+            }
+            toast('Archivo de llave importado');
+            syncWizardGo(syncWizardSteps()[1]);
+          })
+          .catch(function (err) {
+            input.value = '';
+            toast(err && err.message === 'decrypt-failed' ? 'Contraseña del archivo incorrecta' : 'El archivo de llave no es válido');
+          });
+      };
+      reader.readAsText(file);
+    });
+
+    $wizard.on('click', '[data-action="toggle-passphrase"]', function () {
+      var $input = $('#sync-passphrase');
+      var show = $input.attr('type') === 'password';
+      $input.attr('type', show ? 'text' : 'password');
+      $(this).text(show ? 'Ocultar' : 'Mostrar').attr('aria-pressed', String(show));
+    });
+
+    // Fills the field with a strong random phrase (~79 bits; confusable
+    // characters excluded) and reveals it so the user can write it down.
+    $wizard.on('click', '[data-action="sync-generate-passphrase"]', function () {
+      var alphabet = 'abcdefghjkmnpqrstuvwxyz23456789';
+      var bytes = global.crypto.getRandomValues(new Uint8Array(16));
+      var phrase = Array.prototype.map
+        .call(bytes, function (b, i) {
+          return alphabet[b % alphabet.length] + (i % 4 === 3 && i < 15 ? '-' : '');
+        })
+        .join('');
+      $('#sync-passphrase').attr('type', 'text').val(phrase);
+      $wizard.find('[data-action="toggle-passphrase"]').text('Ocultar').attr('aria-pressed', 'true');
+      toast('Frase generada: guárdala antes de continuar');
+    });
+
+    // Hardware/browser back while the wizard is open: restore the step
+    // recorded in the entry we land on, or close the modal when popping past
+    // its first entry (see js/process.js for the reference pattern).
+    $(global).on('popstate', function (e) {
+      if (syncWizardUnwinding) {
+        syncWizardUnwinding = false;
+        return;
+      }
+      if (!syncWizard) return;
+      var state = e.originalEvent.state;
+      if (state && state.swSession === SYNC_WIZARD_SESSION) {
+        syncWizard.step = state.swStep;
+        syncWizard.path = state.swPath;
+        syncWizardDepth = state.swDepth;
+        renderSyncWizard();
+        return;
+      }
+      closeSyncWizard(true);
+    });
+  }
+
+  // Runs a sync pass and reports the outcome; shared by the Settings button
+  // and the wizard's final step.
+  function syncNow() {
+    toast('Sincronizando…');
+    global.GTD.syncer
+      .sync()
+      .then(function (result) {
+        // {redirecting: true} means the page is leaving for Google's
+        // consent screen; the flow resumes at boot after the redirect.
+        if (!result || result.redirecting) return;
+        if (result.ok) {
+          toast('Sincronizado ✅');
+        } else {
+          var failed = result.results.filter(function (r) {
+            return !r.ok;
+          })[0];
+          toast(syncBackendLabel(failed.provider) + ': ' + syncErrorMessage(failed.error));
+        }
+        refresh();
+      })
+      .catch(function (err) {
+        toast(syncErrorMessage(err));
+      });
   }
 
   // Copies long multi-line text (AI prompts). navigator.clipboard needs a
@@ -1905,6 +2513,8 @@
     collapseEditor: function () {
       expandedItemId = null;
       closeHorizonEditor();
+      closeSortMenu();
+      closeChooser();
     },
   };
 })(window, jQuery);

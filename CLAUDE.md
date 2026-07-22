@@ -64,10 +64,11 @@ Scripts share a single global namespace `GTD` and are loaded in this order (orde
 7. `js/drive.js` — Google Drive transport: OAuth 2.0 Authorization Code flow with PKCE (full-page redirect to `accounts.google.com`, code returned in the query string and exchanged for a token via a background POST bound to a per-attempt `code_verifier`; no external scripts — GIS is a CDN load and stays banned; token + OAuth state + verifier in `sessionStorage`), Drive REST v3 against the user's `appDataFolder`. Each user brings their own OAuth Client ID **and secret** (Google "Web application" clients require it at the token endpoint; device-local, vault-encrypted at rest). `app.js` must `await GTD.drive.handleRedirect(config)` at boot (async; needs the sync config, so after the vault unlocks). Unit-tested via `npm test` (`test/drive.test.js`).
 8. `js/server.js` — self-hosted sync server transport: bearer-key HTTP against the tiny makegtd sync protocol (`GET/PUT {base}/gtd/files[/name]`), configured like a proxy (URL + access key) or via the key file. Reference server + protocol spec live in `server/` (stdlib-only Go, not part of the app). Unit-tested via `npm test` (`test/server.test.js`).
 9. `js/model.js` — domain constants (item statuses, labels), factories, pure helpers (overdue/scheduled-today queries, projects without a next action, focus limit).
-10. `js/views.js` — render functions for each view (jQuery-built DOM).
-11. `js/process.js` — the Clarify wizard (GTD decision tree, one item and one decision at a time).
-12. `js/review.js` — the guided weekly review wizard.
-13. `js/app.js` — hash router (`#/hoy`, `#/entrada`, …), navigation shell, global quick-capture, service worker registration, and the boot unlock gate (blocks the app behind the vault when encryption at rest is on).
+10. `js/datepicker.js` — shared date/time picker dialog (`GTD.datepicker.open`): single-month grid, optional time behind progressive disclosure, no recurrence. Used by the item editor, the Clarify wizard and the project add-action form.
+11. `js/views.js` — render functions for each view (jQuery-built DOM).
+12. `js/process.js` — the Clarify wizard (GTD decision tree, one item and one decision at a time).
+13. `js/review.js` — the guided weekly review wizard.
+14. `js/app.js` — hash router (`#/hoy`, `#/entrada`, …), navigation shell, global quick-capture, service worker registration, and the boot unlock gate (blocks the app behind the vault when encryption at rest is on).
 
 ### Data model
 
