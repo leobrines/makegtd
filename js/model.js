@@ -463,6 +463,55 @@
     return 'en ' + Math.abs(diff) + ' días';
   }
 
+  // ---- List sorting ("Ordenar por") ----
+
+  // Sort key of the item field each criterion sort reads, and the settings
+  // list that defines its order (first value = shown first).
+  var SORT_CRITERIA = {
+    priority: 'priorities',
+    estimate: 'timeEstimates',
+    energy: 'energyLevels',
+  };
+
+  // Returns a sorted copy ('my-order' returns the input untouched: the
+  // stored order IS "Mi orden"). Criterion sorts follow the user-defined
+  // value list order; items without a value go last. Array#sort is stable,
+  // so ties keep "my order".
+  function sortItems(items, sortKey) {
+    if (!sortKey || sortKey === 'my-order') return items;
+    var rank = SORT_CRITERIA[sortKey] ? store.getCriterionValues(SORT_CRITERIA[sortKey]) : null;
+    return items.slice().sort(function (a, b) {
+      if (sortKey === 'title') {
+        return (a.title || '').localeCompare(b.title || '', 'es', { sensitivity: 'base' });
+      }
+      if (sortKey === 'date') {
+        // Dated items first, soonest first; undated ones keep their order at the end.
+        var da = a.date || '9999-99-99';
+        var db = b.date || '9999-99-99';
+        return da < db ? -1 : da > db ? 1 : 0;
+      }
+      if (!rank) return 0;
+      var ia = rank.indexOf(a[sortKey]);
+      var ib = rank.indexOf(b[sortKey]);
+      if (ia === -1) ia = rank.length;
+      if (ib === -1) ib = rank.length;
+      return ia - ib;
+    });
+  }
+
+  // Per-list sort preference, stored in settings so it survives reloads and
+  // is remembered per list ('next', 'waiting', …), like Google Tasks does.
+  function sortPref(listKey) {
+    var prefs = store.getSettings().sortPrefs;
+    return (prefs && prefs[listKey]) || 'my-order';
+  }
+
+  function setSortPref(listKey, sortKey) {
+    var prefs = Object.assign({}, store.getSettings().sortPrefs);
+    prefs[listKey] = sortKey;
+    store.updateSettings({ sortPrefs: prefs });
+  }
+
   function formatDate(isoDate) {
     if (!isoDate) return '';
     var parts = isoDate.slice(0, 10).split('-');
@@ -521,5 +570,8 @@
     reviewIsDue: reviewIsDue,
     relativeDays: relativeDays,
     formatDate: formatDate,
+    sortItems: sortItems,
+    sortPref: sortPref,
+    setSortPref: setSortPref,
   };
 })(window);

@@ -322,13 +322,16 @@
 
       case 'schedule':
         html += question('¿Qué día?');
+        // The picker dialog replaces the native date/time inputs; the chosen
+        // values live in hidden fields the submit and gcal handlers read.
         html +=
           '<form id="pz-schedule-form">' +
-          '<input type="date" id="pz-schedule-input" class="field mb-3" min="' + model.todayISO() + '" value="' + model.todayISO() + '" />' +
-          (model.timeFieldEnabled()
-            ? '<label class="block text-sm text-stone-500 dark:text-stone-400 mb-1" for="pz-schedule-time">Hora (opcional)</label>' +
-              '<input type="time" id="pz-schedule-time" class="field mb-3" />'
-            : '') +
+          '<input type="hidden" id="pz-schedule-input" value="' + model.todayISO() + '" />' +
+          '<input type="hidden" id="pz-schedule-time" value="" />' +
+          '<button type="button" id="pz-schedule-pick" class="btn-choice mb-3" aria-haspopup="dialog">' +
+          '<span aria-hidden="true">📅</span>' +
+          '<span id="pz-schedule-label">' + model.formatDate(model.todayISO()) + '</span>' +
+          '</button>' +
           projectSelect(item) +
           '<button type="submit" class="btn-primary w-full">Programar</button>' +
           (model.gcalEnabled()
@@ -581,6 +584,20 @@
         return;
       }
       go('next');
+    });
+
+    // Scheduling can't happen in the past: the wizard commits to a real day.
+    $view.on('click', '#pz-schedule-pick', function () {
+      global.GTD.datepicker.open({
+        date: $('#pz-schedule-input').val() || null,
+        time: $('#pz-schedule-time').val() || null,
+        minDate: model.todayISO(),
+        onDone: function (date, time) {
+          $('#pz-schedule-input').val(date);
+          $('#pz-schedule-time').val(time || '');
+          $('#pz-schedule-label').text(model.formatDate(date) + (time ? ' · ' + time : ''));
+        },
+      });
     });
 
     // Open Google Calendar pre-filled with the chosen date, without leaving the wizard.
