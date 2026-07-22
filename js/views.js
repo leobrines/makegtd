@@ -977,10 +977,12 @@
             '</p>';
           // The Client ID is not a secret (it travels in the OAuth URL);
           // showing it here saves the trip to the Google console when
-          // connecting another device — only the passphrase must be retyped.
+          // connecting another device. The client secret is not shown — copy it
+          // from the Google console again (or export the key file on a server
+          // backend). The passphrase must also be retyped.
           html +=
             '<p class="text-xs text-stone-400 dark:text-stone-500">' +
-            'Para conectar otro dispositivo usa este mismo ID de cliente (y tu frase de cifrado): ' +
+            'Para conectar otro dispositivo usa este mismo ID de cliente (con su secreto y tu frase de cifrado): ' +
             '<code class="break-all">' + esc(b.clientId || '') + '</code> ' +
             '<button type="button" class="btn-ghost" data-action="copy-value" data-value="' + esc(b.clientId || '') + '">Copiar</button>' +
             '</p>';
@@ -1068,8 +1070,10 @@
         '(«Publish app»): el permiso que usa makeGTD (solo los datos de la propia app en tu Drive) no es sensible ' +
         'y no requiere verificación de Google. Si prefieres dejarla en modo «Testing», añade tu correo como usuario ' +
         'de prueba, pero tendrás que volver a autorizar cada 7 días.</li>' +
-        '<li>Copia el «ID de cliente» (termina en <code>.apps.googleusercontent.com</code>) y pégalo aquí abajo. ' +
-        'Los cambios en Google pueden tardar unos minutos en activarse.</li>' +
+        '<li>Copia el «ID de cliente» (termina en <code>.apps.googleusercontent.com</code>) y el ' +
+        '«Secreto de cliente» y pégalos aquí abajo. Google exige el secreto para el intercambio seguro ' +
+        'del código (PKCE); como es tu propio cliente y solo accede a tu Drive, se guarda únicamente en ' +
+        'este dispositivo. Los cambios en Google pueden tardar unos minutos en activarse.</li>' +
         '</ol></details>';
     if (formProvider) {
       html += '<form id="sync-config-form" class="space-y-3">';
@@ -1078,6 +1082,15 @@
           '<label class="block">' +
           '<span class="block">ID de cliente de Google</span>' +
           '<input type="text" id="sync-client-id" name="client-id" class="field mt-1" placeholder="…apps.googleusercontent.com" autocomplete="off" />' +
+          '</label>';
+        html +=
+          '<label class="block">' +
+          '<span class="block">Secreto de cliente</span>' +
+          '<span class="block text-xs text-stone-400 dark:text-stone-500 mt-0.5 mb-1">' +
+          'El «Secreto de cliente» de ese mismo cliente OAuth. Se guarda solo en este dispositivo ' +
+          '(cifrado si activas la protección del dispositivo).' +
+          '</span>' +
+          '<input type="password" id="sync-client-secret" name="client-secret" class="field" autocomplete="off" />' +
           '</label>';
       } else {
         html +=
@@ -1689,7 +1702,7 @@
       // second backend the stored passphrase is reused (empty value).
       var passphrase = $('#sync-passphrase').val() || '';
       if ($('#sync-client-id').length) {
-        if (!global.GTD.syncer.setGdriveConfig($('#sync-client-id').val(), passphrase)) {
+        if (!global.GTD.syncer.setGdriveConfig($('#sync-client-id').val(), $('#sync-client-secret').val(), passphrase)) {
           toast('Faltan el ID de cliente o la frase de cifrado');
           return;
         }

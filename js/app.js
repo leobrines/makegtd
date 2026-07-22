@@ -460,11 +460,15 @@
     // Persistence is async (IndexedDB): nothing may touch the store until
     // init() resolves. It never rejects — it falls back to localStorage.
     // runUnlockGate() then blocks until the device vault (if any) is unlocked.
-    store.init().then(runUnlockGate).then(function () {
-      // Must run before the router reads location.hash: an OAuth redirect
-      // from Google comes back with the access token in the fragment.
-      var auth = global.GTD.drive.handleRedirect();
-
+    store.init()
+      .then(runUnlockGate)
+      // Finish any Google OAuth redirect first: it exchanges the code (in the
+      // query string) for a token and needs the sync config, which is ready
+      // once the vault (if any) has unlocked. Async token exchange.
+      .then(function () {
+        return global.GTD.drive.handleRedirect(global.GTD.syncer.getConfig());
+      })
+      .then(function (auth) {
       views.bind();
       global.GTD.process.bind();
       global.GTD.review.bind();

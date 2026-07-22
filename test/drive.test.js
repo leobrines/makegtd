@@ -12,41 +12,48 @@ function test(name, fn) {
   tests.push({ name: name, fn: fn });
 }
 
-test('buildAuthUrl targets the Google auth endpoint with the implicit flow', function () {
+test('buildAuthUrl targets the Google auth endpoint with the PKCE code flow', function () {
   var url = new URL(
     pure.buildAuthUrl({
       clientId: '123-abc.apps.googleusercontent.com',
       redirectUri: 'https://makegtd.example/app/',
       state: 'st4te',
+      codeChallenge: 'abc123challenge',
     })
   );
   assert.strictEqual(url.origin + url.pathname, 'https://accounts.google.com/o/oauth2/v2/auth');
   assert.strictEqual(url.searchParams.get('client_id'), '123-abc.apps.googleusercontent.com');
   assert.strictEqual(url.searchParams.get('redirect_uri'), 'https://makegtd.example/app/');
-  assert.strictEqual(url.searchParams.get('response_type'), 'token');
+  assert.strictEqual(url.searchParams.get('response_type'), 'code'); // Not the implicit token.
+  assert.strictEqual(url.searchParams.get('code_challenge'), 'abc123challenge');
+  assert.strictEqual(url.searchParams.get('code_challenge_method'), 'S256');
   assert.strictEqual(url.searchParams.get('scope'), 'https://www.googleapis.com/auth/drive.appdata');
   assert.strictEqual(url.searchParams.get('state'), 'st4te');
 });
 
-test('parseFragment reads the token response Google redirects back with', function () {
-  var parsed = pure.parseFragment('#state=st4te&access_token=ya29.tok&token_type=Bearer&expires_in=3599&scope=x');
-  assert.strictEqual(parsed.accessToken, 'ya29.tok');
-  assert.strictEqual(parsed.expiresIn, 3599);
+test('base64url encodes without padding or +/ characters', function () {
+  // 0xFB 0xFF -> standard base64 "+/8=" -> url-safe "-_8" (padding stripped).
+  assert.strictEqual(pure.base64url(new Uint8Array([0xfb, 0xff])), '-_8');
+  assert.strictEqual(pure.base64url(new Uint8Array([])), '');
+});
+
+test('parseRedirectQuery reads the code response Google redirects back with', function () {
+  var parsed = pure.parseRedirectQuery('?code=4/abc-code&state=st4te&scope=x');
+  assert.strictEqual(parsed.code, '4/abc-code');
   assert.strictEqual(parsed.state, 'st4te');
   assert.strictEqual(parsed.error, null);
 });
 
-test('parseFragment reads error responses', function () {
-  var parsed = pure.parseFragment('#error=access_denied&state=st4te');
+test('parseRedirectQuery reads error responses', function () {
+  var parsed = pure.parseRedirectQuery('?error=access_denied&state=st4te');
   assert.strictEqual(parsed.error, 'access_denied');
-  assert.strictEqual(parsed.accessToken, null);
+  assert.strictEqual(parsed.code, null);
 });
 
-test('parseFragment ignores ordinary app routes', function () {
-  assert.strictEqual(pure.parseFragment('#/hoy'), null);
-  assert.strictEqual(pure.parseFragment('#/ajustes'), null);
-  assert.strictEqual(pure.parseFragment(''), null);
-  assert.strictEqual(pure.parseFragment(undefined), null);
+test('parseRedirectQuery ignores non-OAuth query strings', function () {
+  assert.strictEqual(pure.parseRedirectQuery('?utm=x'), null);
+  assert.strictEqual(pure.parseRedirectQuery(''), null);
+  assert.strictEqual(pure.parseRedirectQuery(undefined), null);
 });
 
 test('multipartBody builds a well-formed multipart/related payload', function () {

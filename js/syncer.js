@@ -124,7 +124,13 @@
     if (typeof raw.passphrase !== 'string' || !raw.passphrase) return null;
     var gdrive = null;
     var clientId = String((raw.gdrive && raw.gdrive.clientId) || raw.clientId || '').trim();
-    if (clientId) gdrive = { clientId: clientId };
+    if (clientId) {
+      gdrive = { clientId: clientId };
+      // Google "Web application" clients need their secret at the token
+      // endpoint (Authorization Code + PKCE). Device-local, never synced.
+      var clientSecret = String((raw.gdrive && raw.gdrive.clientSecret) || raw.clientSecret || '').trim();
+      if (clientSecret) gdrive.clientSecret = clientSecret;
+    }
     var server = null;
     if (raw.server) {
       var url = normalizeServerUrl(raw.server.url);
@@ -298,11 +304,11 @@
   // Adding a backend keeps the other one; an empty passphrase reuses the
   // stored one (adding a second backend never asks for it again — the
   // encrypted files must be identical on every backend).
-  function setGdriveConfig(clientId, passphrase) {
+  function setGdriveConfig(clientId, clientSecret, passphrase) {
     var existing = getConfig();
     var config = normalizeConfig({
       passphrase: String(passphrase || '') || (existing ? existing.passphrase : ''),
-      gdrive: { clientId: clientId },
+      gdrive: { clientId: clientId, clientSecret: clientSecret },
       server: existing ? existing.server : null,
     });
     if (!config || !config.gdrive) return false;
@@ -314,7 +320,7 @@
     var existing = getConfig();
     var config = normalizeConfig({
       passphrase: String(passphrase || '') || (existing ? existing.passphrase : ''),
-      clientId: existing && existing.gdrive ? existing.gdrive.clientId : '',
+      gdrive: existing ? existing.gdrive : null, // Preserve id + secret unchanged.
       server: { url: url, key: key },
     });
     if (!config || !config.server) return false;
