@@ -387,16 +387,88 @@
     });
   }
 
+  // ---- Device unlock gate (encryption at rest) ----
+
+  // When a device vault is enrolled the store boots locked: block the whole app
+  // behind the unlock overlay until the data key is released (biometric or the
+  // recovery code). Resolves once the store is readable; a no-op without a vault.
+  function runUnlockGate() {
+    var vault = global.GTD.vault;
+    if (!vault || !vault.isEnrolled()) return Promise.resolve();
+    return new Promise(function (resolve) {
+      showUnlockOverlay(vault, resolve);
+    });
+  }
+
+  function showUnlockOverlay(vault, done) {
+    var $overlay = $('#unlock-overlay');
+    var $err = $('#unlock-error');
+    var $bio = $('#unlock-biometric');
+    $overlay.removeClass('hidden').attr('aria-hidden', 'false');
+
+    function fail(message) {
+      $err.text(message).removeClass('hidden');
+    }
+
+    // Bring the decrypted state into memory (or encrypt an as-yet-plaintext
+    // document, self-healing an interrupted enrollment), load the sync config,
+    // then let the app boot.
+    function finish(key) {
+      var step = store.isLocked() ? store.unlockWith(key) : store.enableEncryption(key);
+      return step
+        .then(function () {
+          return global.GTD.syncer.loadConfig();
+        })
+        .then(function () {
+          $overlay.addClass('hidden').attr('aria-hidden', 'true');
+          done();
+        })
+        .catch(function () {
+          fail('No se pudieron descifrar los datos. Inténtalo de nuevo.');
+        });
+    }
+
+    if (vault.hasBiometric()) {
+      $bio.removeClass('hidden').off('click').on('click', function () {
+        $err.addClass('hidden');
+        $bio.prop('disabled', true);
+        vault
+          .unlockWithBiometric()
+          .then(finish)
+          .catch(function () {
+            $bio.prop('disabled', false);
+            fail('No se pudo verificar. Usa tu código de recuperación.');
+          });
+      });
+    }
+
+    $('#unlock-recovery-form').off('submit').on('submit', function (e) {
+      e.preventDefault();
+      $err.addClass('hidden');
+      vault
+        .unlockWithRecovery($('#unlock-recovery-input').val() || '')
+        .then(finish)
+        .catch(function () {
+          fail('Código incorrecto.');
+        });
+    });
+  }
+
   // ---- Boot ----
 
   $(function () {
     // Persistence is async (IndexedDB): nothing may touch the store until
     // init() resolves. It never rejects — it falls back to localStorage.
-    store.init().then(function () {
-      // Must run before the router reads location.hash: an OAuth redirect
-      // from Google comes back with the access token in the fragment.
-      var auth = global.GTD.drive.handleRedirect();
-
+    // runUnlockGate() then blocks until the device vault (if any) is unlocked.
+    store.init()
+      .then(runUnlockGate)
+      // Finish any Google OAuth redirect first: it exchanges the code (in the
+      // query string) for a token and needs the sync config, which is ready
+      // once the vault (if any) has unlocked. Async token exchange.
+      .then(function () {
+        return global.GTD.drive.handleRedirect(global.GTD.syncer.getConfig());
+      })
+      .then(function (auth) {
       views.bind();
       global.GTD.process.bind();
       global.GTD.review.bind();

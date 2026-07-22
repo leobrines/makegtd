@@ -2,6 +2,21 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
+  <!--
+    Content Security Policy: the app is fully self-contained, so scripts, styles,
+    workers and the manifest are locked to same-origin. 'unsafe-inline' is kept
+    only for style attributes (no inline <script> or on* handlers exist, so
+    script injection cannot execute — a synced item title reaches .html() only
+    through esc()). connect-src allows https (Google Drive and any self-hosted
+    sync server the user configures) plus http loopback for local dev servers.
+    Clickjacking protection (frame-ancestors) needs an HTTP header; a static
+    host should also send it.
+  -->
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; manifest-src 'self'; worker-src 'self'; frame-src 'none'; form-action 'self'; connect-src 'self' https: http://localhost:* http://127.0.0.1:*"
+  />
+  <meta name="referrer" content="no-referrer" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="description" content="makeGTD — tu sistema GTD completo, simple y sin distracciones." />
   <meta name="theme-color" content="#fafaf9" media="(prefers-color-scheme: light)" />
@@ -479,6 +494,30 @@
       </div>
     </div>
 
+    <!-- Device unlock gate (shown at boot when encryption at rest is on) -->
+    <div id="unlock-overlay" class="fixed inset-0 z-[60] hidden bg-stone-50 dark:bg-stone-950" aria-hidden="true">
+      <div class="max-w-md mx-auto mt-[16vh] px-4">
+        <div class="bg-white dark:bg-stone-900 rounded-2xl p-5 border border-stone-200 dark:border-stone-700 space-y-4">
+          <div class="flex items-center gap-2">
+            <span class="w-7 h-7 rounded-lg bg-accent text-white text-sm font-bold flex items-center justify-center" aria-hidden="true">🔒</span>
+            <span class="font-semibold tracking-tight">makeGTD está protegido</span>
+          </div>
+          <p class="text-sm text-stone-500 dark:text-stone-400">
+            Tus datos están cifrados en este dispositivo. Desbloquéalos para continuar.
+          </p>
+          <button type="button" id="unlock-biometric" class="btn-primary w-full hidden">Desbloquear con biometría</button>
+          <form id="unlock-recovery-form" class="space-y-2">
+            <label class="block">
+              <span class="block text-sm text-stone-500 dark:text-stone-400">Código de recuperación</span>
+              <input type="password" id="unlock-recovery-input" class="field mt-1 w-full" autocomplete="off" autocapitalize="off" spellcheck="false" />
+            </label>
+            <button type="submit" class="btn-secondary w-full">Desbloquear con código</button>
+          </form>
+          <p id="unlock-error" class="text-sm text-red-500 dark:text-red-400 hidden" role="alert"></p>
+        </div>
+      </div>
+    </div>
+
     <!-- Shared date/time picker: single-month grid with optional time behind
          progressive disclosure. The body is rendered by js/datepicker.js. -->
     <div id="datepicker-overlay" class="fixed inset-0 z-50 hidden bg-stone-900/40 dark:bg-black/60" aria-hidden="true">
@@ -549,6 +588,7 @@
   <script src="js/store.js"></script>
   <script src="js/sync.js"></script>
   <script src="js/crypto.js"></script>
+  <script src="js/vault.js"></script>
   <script src="js/syncer.js"></script>
   <script src="js/drive.js"></script>
   <script src="js/server.js"></script>

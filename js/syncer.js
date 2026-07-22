@@ -43,9 +43,17 @@
   'use strict';
 
   var CONFIG_KEY = 'gtd:sync:config';
+  // When a device vault is enrolled (js/vault.js) the config — which holds the
+  // E2E passphrase and the server access key — is stored here encrypted at rest
+  // under the vault's data key instead of as plaintext in CONFIG_KEY.
+  var CONFIG_ENC_KEY = 'gtd:sync:config:enc';
   var LEGACY_GDRIVE_KEY = 'gtd:sync:gdrive';
   var DEVICE_KEY = 'gtd:device-id';
   var LAST_SYNC_KEY = 'gtd:sync:last';
+  // Per-device-file high-water mark of the newest savedAt merged from it, so a
+  // backend that serves an older (rolled-back) copy cannot resurrect stale
+  // data. See isStaleDoc().
+  var HWM_KEY = 'gtd:sync:hwm';
   var FILE_PREFIX = 'gtd-device-';
   var FILE_SUFFIX = '.json';
 
@@ -64,8 +72,18 @@
     );
   }
 
+  // Loopback hosts where plain http is safe (local dev / a sync server on the
+  // same machine). Everything else must use https so credentials and the
+  // encrypted payload never travel in the clear.
+  function isLocalHost(host) {
+    host = String(host || '').toLowerCase();
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]' || /\.localhost$/.test(host);
+  }
+
   // Accepts what the user types ("sync.example.com/", "http://…") and
-  // returns a canonical base URL without trailing slash, or null.
+  // returns a canonical base URL without trailing slash, or null. Plain http
+  // is rejected except for loopback: a downgraded transport would defeat the
+  // whole point of end-to-end encryption.
   function normalizeServerUrl(raw) {
     var text = String(raw || '').trim();
     if (!text) return null;
@@ -76,9 +94,25 @@
     } catch (err) {
       return null;
     }
-    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+    if (url.protocol === 'http:') {
+      if (!isLocalHost(url.hostname)) return null; // Force https off loopback.
+    } else if (url.protocol !== 'https:') {
+      return null;
+    }
     if (url.search || url.hash) return null;
     return (url.origin + url.pathname).replace(/\/+$/, '');
+  }
+
+  // Rollback/replay guard: a downloaded device doc is stale if its savedAt is
+  // strictly older than the newest we have already merged from that same file.
+  // Skipping it never loses local data (the merge is last-writer-wins, so an
+  // older whole-doc would lose anyway); it only stops a hostile or buggy
+  // backend from serving a rolled-back copy. A doc with no savedAt, or a file
+  // we have not seen, is accepted (nothing to compare against).
+  function isStaleDoc(fileName, docSavedAt, hwm) {
+    var prev = hwm && hwm[fileName];
+    if (!prev || !docSavedAt) return false;
+    return String(docSavedAt) < String(prev);
   }
 
   // Normalizes any stored shape to a valid config ({passphrase, gdrive|null,
@@ -90,7 +124,13 @@
     if (typeof raw.passphrase !== 'string' || !raw.passphrase) return null;
     var gdrive = null;
     var clientId = String((raw.gdrive && raw.gdrive.clientId) || raw.clientId || '').trim();
-    if (clientId) gdrive = { clientId: clientId };
+    if (clientId) {
+      gdrive = { clientId: clientId };
+      // Google "Web application" clients need their secret at the token
+      // endpoint (Authorization Code + PKCE). Device-local, never synced.
+      var clientSecret = String((raw.gdrive && raw.gdrive.clientSecret) || raw.clientSecret || '').trim();
+      if (clientSecret) gdrive.clientSecret = clientSecret;
+    }
     var server = null;
     if (raw.server) {
       var url = normalizeServerUrl(raw.server.url);
@@ -145,13 +185,117 @@
     } catch (ignored) {}
   }
 
+  // ---- Config storage (plaintext, or encrypted at rest when a vault is on) ----
+
+  // When a device vault is enrolled the config never touches disk in the clear:
+  // it is kept in memory (configCache) for synchronous reads and mirrored to
+  // CONFIG_ENC_KEY encrypted under the vault data key. loadConfig() (called at
+  // boot after unlock) populates the cache and migrates any pre-vault plaintext.
+  var configCache = null;
+  var configLoaded = false;
+
+  function vaultEnrolled() {
+    return !!(global.GTD && global.GTD.vault && global.GTD.vault.isEnrolled());
+  }
+
+  function vaultKey() {
+    return vaultEnrolled() ? global.GTD.vault.getKey() : null;
+  }
+
+  // Reads the raw stored config object (pre-normalization). Uses the in-memory
+  // cache when the vault is on; otherwise the plaintext key, exactly as before.
+  function readConfigRaw() {
+    if (vaultEnrolled()) return configLoaded ? configCache : null;
+    return readJSON(CONFIG_KEY);
+  }
+
+  // Persists a config object (or null to clear). With a vault it updates the
+  // cache synchronously and writes the encrypted mirror, never plaintext.
+  function writeConfigRaw(config) {
+    if (vaultEnrolled()) {
+      configCache = config;
+      configLoaded = true;
+      writeJSON(CONFIG_KEY, null); // Ensure no plaintext copy lingers.
+      var key = vaultKey();
+      if (!config) {
+        writeJSON(CONFIG_ENC_KEY, null);
+        return;
+      }
+      if (!key) return; // Enrolled but locked: cannot encrypt; skip (no plaintext).
+      global.GTD.vault
+        .wrapString(key, JSON.stringify(config))
+        .then(function (envelope) {
+          try {
+            global.localStorage.setItem(CONFIG_ENC_KEY, envelope);
+          } catch (ignored) {}
+        })
+        .catch(function () {});
+      return;
+    }
+    writeJSON(CONFIG_KEY, config);
+  }
+
+  // Called at boot after the vault unlocks (and after enrollment). Decrypts the
+  // stored config into the cache, migrating a pre-vault plaintext config the
+  // first time. No-op without a vault. Resolves when the cache is ready.
+  function loadConfig() {
+    if (!vaultEnrolled()) {
+      configLoaded = false;
+      configCache = null;
+      return Promise.resolve();
+    }
+    var key = vaultKey();
+    var encRaw = null;
+    try {
+      encRaw = global.localStorage.getItem(CONFIG_ENC_KEY);
+    } catch (ignored) {}
+    if (encRaw && key) {
+      return global.GTD.vault
+        .unwrapString(key, encRaw)
+        .then(function (json) {
+          try {
+            configCache = JSON.parse(json);
+          } catch (err) {
+            configCache = null;
+          }
+          configLoaded = true;
+        })
+        .catch(function () {
+          configCache = null;
+          configLoaded = true;
+        });
+    }
+    // No encrypted config yet: migrate any plaintext config, then encrypt it.
+    var plain = readJSON(CONFIG_KEY) || readJSON(LEGACY_GDRIVE_KEY);
+    configCache = plain || null;
+    configLoaded = true;
+    if (plain) {
+      writeConfigRaw(plain); // Encrypt and drop the plaintext copies.
+      writeJSON(LEGACY_GDRIVE_KEY, null);
+    }
+    return Promise.resolve();
+  }
+
+  // Called while the vault is still enrolled, right before it is disabled:
+  // moves the config back to plaintext storage so it survives the switch-off.
+  function prepareDisableEncryption() {
+    var cfg = configLoaded ? configCache : null;
+    try {
+      global.localStorage.removeItem(CONFIG_ENC_KEY);
+    } catch (ignored) {}
+    configCache = null;
+    configLoaded = false;
+    if (cfg) writeJSON(CONFIG_KEY, cfg);
+  }
+
   function getConfig() {
-    var config = normalizeConfig(readJSON(CONFIG_KEY));
+    var config = normalizeConfig(readConfigRaw());
     if (config) return config;
+    if (vaultEnrolled()) return null; // Legacy plaintext migration is plaintext-only.
     // One-time migration from the gdrive-only config key.
     var legacy = normalizeConfig(readJSON(LEGACY_GDRIVE_KEY));
     if (legacy) {
-      writeJSON(CONFIG_KEY, legacy);
+      writeConfigRaw(legacy);
       writeJSON(LEGACY_GDRIVE_KEY, null);
     }
     return legacy;
@@ -160,15 +304,15 @@
   // Adding a backend keeps the other one; an empty passphrase reuses the
   // stored one (adding a second backend never asks for it again — the
   // encrypted files must be identical on every backend).
-  function setGdriveConfig(clientId, passphrase) {
+  function setGdriveConfig(clientId, clientSecret, passphrase) {
     var existing = getConfig();
     var config = normalizeConfig({
       passphrase: String(passphrase || '') || (existing ? existing.passphrase : ''),
-      gdrive: { clientId: clientId },
+      gdrive: { clientId: clientId, clientSecret: clientSecret },
       server: existing ? existing.server : null,
     });
     if (!config || !config.gdrive) return false;
-    writeJSON(CONFIG_KEY, config);
+    writeConfigRaw(config);
     return true;
   }
 
@@ -176,11 +320,11 @@
     var existing = getConfig();
     var config = normalizeConfig({
       passphrase: String(passphrase || '') || (existing ? existing.passphrase : ''),
-      clientId: existing && existing.gdrive ? existing.gdrive.clientId : '',
+      gdrive: existing ? existing.gdrive : null, // Preserve id + secret unchanged.
       server: { url: url, key: key },
     });
     if (!config || !config.server) return false;
-    writeJSON(CONFIG_KEY, config);
+    writeConfigRaw(config);
     return true;
   }
 
@@ -197,16 +341,21 @@
       disconnect();
       return;
     }
-    writeJSON(CONFIG_KEY, config);
+    writeConfigRaw(config);
     var last = readLastSyncMap();
     delete last[provider];
     writeJSON(LAST_SYNC_KEY, last);
   }
 
   function disconnect() {
+    writeConfigRaw(null);
     writeJSON(CONFIG_KEY, null);
+    writeJSON(CONFIG_ENC_KEY, null);
     writeJSON(LEGACY_GDRIVE_KEY, null);
     writeJSON(LAST_SYNC_KEY, null);
+    writeJSON(HWM_KEY, null);
+    configCache = null;
+    configLoaded = vaultEnrolled(); // Cache is authoritative (empty) when on.
     if (global.GTD.drive && global.GTD.drive.clearSession) global.GTD.drive.clearSession();
   }
 
@@ -214,6 +363,11 @@
   // (unknown backend), which is simply discarded.
   function readLastSyncMap() {
     var value = readJSON(LAST_SYNC_KEY);
+    return value && typeof value === 'object' ? value : {};
+  }
+
+  function readHwm() {
+    var value = readJSON(HWM_KEY);
     return value && typeof value === 'object' ? value : {};
   }
 
@@ -294,21 +448,38 @@
               // fails to decrypt aborts the sync (wrong passphrase).
               if (!global.GTD.crypto.isEnvelope(content)) return null;
               return global.GTD.crypto.decryptString(content, config.passphrase).then(function (json) {
+                var doc;
                 try {
-                  return JSON.parse(json);
+                  doc = JSON.parse(json);
                 } catch (err) {
                   return null;
                 }
+                return { name: file.name, doc: doc };
               });
             });
           })
         );
       })
-      .then(function (remoteDocs) {
-        remoteDocs = remoteDocs.filter(Boolean);
+      .then(function (entries) {
+        // Drop any device file the backend served older than we last merged
+        // from it (rollback/replay guard); accept and record the rest.
+        var hwm = readHwm();
+        var fresh = entries.filter(Boolean).filter(function (e) {
+          return !isStaleDoc(e.name, e.doc && e.doc.savedAt, hwm);
+        });
+        var remoteDocs = fresh.map(function (e) {
+          return e.doc;
+        });
         if (remoteDocs.length) {
           var merged = global.GTD.sync.merge([global.GTD.store.load()].concat(remoteDocs));
           global.GTD.store.replaceState(merged);
+        }
+        if (fresh.length) {
+          fresh.forEach(function (e) {
+            var savedAt = e.doc && e.doc.savedAt;
+            if (savedAt && (!hwm[e.name] || String(savedAt) > String(hwm[e.name]))) hwm[e.name] = savedAt;
+          });
+          writeJSON(HWM_KEY, hwm);
         }
         return global.GTD.crypto
           .encryptString(JSON.stringify(global.GTD.store.load()), config.passphrase)
@@ -397,12 +568,16 @@
     removeBackend: removeBackend,
     disconnect: disconnect,
     sync: sync,
+    loadConfig: loadConfig,
+    prepareDisableEncryption: prepareDisableEncryption,
     exportKeyFile: exportKeyFile,
     importKeyFile: importKeyFile,
     _pure: {
       deviceFileName: deviceFileName,
       isDeviceFile: isDeviceFile,
       normalizeServerUrl: normalizeServerUrl,
+      isLocalHost: isLocalHost,
+      isStaleDoc: isStaleDoc,
       normalizeConfig: normalizeConfig,
       buildKeyFile: buildKeyFile,
       parseKeyFile: parseKeyFile,
