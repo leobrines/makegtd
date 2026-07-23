@@ -193,6 +193,13 @@
   // boot after unlock) populates the cache and migrates any pre-vault plaintext.
   var configCache = null;
   var configLoaded = false;
+  // Resolves once the most recent encrypted-config write has reached disk. The
+  // vault path persists the config asynchronously (encrypt -> setItem), so a
+  // caller about to leave the page (the Google Drive OAuth redirect) must wait
+  // for this first — otherwise navigation tears the page down before the write
+  // lands, the config is lost (the plaintext copy is already gone) and the
+  // return trip fails with 'not-configured'. Already-resolved without a vault.
+  var configWrite = Promise.resolve();
 
   function vaultEnrolled() {
     return !!(global.GTD && global.GTD.vault && global.GTD.vault.isEnrolled());
@@ -222,7 +229,7 @@
         return;
       }
       if (!key) return; // Enrolled but locked: cannot encrypt; skip (no plaintext).
-      global.GTD.vault
+      configWrite = global.GTD.vault
         .wrapString(key, JSON.stringify(config))
         .then(function (envelope) {
           try {
@@ -286,6 +293,12 @@
     configCache = null;
     configLoaded = false;
     if (cfg) writeJSON(CONFIG_KEY, cfg);
+  }
+
+  // Await the last encrypted-config write before doing anything that could
+  // leave the page (see configWrite). No-op (resolved) without a vault.
+  function whenConfigPersisted() {
+    return configWrite;
   }
 
   function getConfig() {
@@ -503,6 +516,16 @@
   function sync() {
     var config = getConfig();
     if (!config) return Promise.reject(new Error('not-configured'));
+    // The gdrive backend may leave the page for an OAuth redirect. With a vault
+    // the config is written asynchronously; make sure that write has reached
+    // disk before any redirect, or the config is lost and the return trip fails
+    // with 'not-configured' ("No se pudo conectar con Google").
+    return whenConfigPersisted().then(function () {
+      return runBackends(config);
+    });
+  }
+
+  function runBackends(config) {
     var providers = [];
     if (config.server) providers.push('server');
     if (config.gdrive) providers.push('gdrive');
@@ -569,6 +592,7 @@
     disconnect: disconnect,
     sync: sync,
     loadConfig: loadConfig,
+    whenConfigPersisted: whenConfigPersisted,
     prepareDisableEncryption: prepareDisableEncryption,
     exportKeyFile: exportKeyFile,
     importKeyFile: importKeyFile,
