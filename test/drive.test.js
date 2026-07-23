@@ -29,6 +29,9 @@ test('buildAuthUrl targets the Google auth endpoint with the PKCE code flow', fu
   assert.strictEqual(url.searchParams.get('code_challenge_method'), 'S256');
   assert.strictEqual(url.searchParams.get('scope'), 'https://www.googleapis.com/auth/drive.appdata');
   assert.strictEqual(url.searchParams.get('state'), 'st4te');
+  // Offline access so background sync can refresh the token without re-consent.
+  assert.strictEqual(url.searchParams.get('access_type'), 'offline');
+  assert.strictEqual(url.searchParams.get('prompt'), 'consent');
 });
 
 test('base64url encodes without padding or +/ characters', function () {

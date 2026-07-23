@@ -314,9 +314,30 @@
     if (!entity.updatedAt) entity.updatedAt = entity.createdAt || new Date().toISOString();
   }
 
+  // Local-change subscribers (js/app.js wires auto-sync here). They fire after
+  // every persisted mutation EXCEPT sync-driven ones: replaceState() suppresses
+  // the notification because the merged state it writes has already been pushed
+  // in the same sync pass, so re-notifying would loop devices against each other.
+  var saveListeners = [];
+  var notifySuppressed = 0;
+
+  function subscribe(fn) {
+    if (typeof fn === 'function') saveListeners.push(fn);
+  }
+
+  function notifySaved() {
+    if (notifySuppressed > 0) return;
+    saveListeners.forEach(function (fn) {
+      try {
+        fn();
+      } catch (ignored) {}
+    });
+  }
+
   function save() {
     load().savedAt = new Date().toISOString();
     persist();
+    notifySaved();
   }
 
   function uid() {
@@ -734,8 +755,13 @@
   // Swap the whole in-memory state for a merged document (sync layer). The
   // document is normalized through migrate() and persisted atomically.
   function replaceState(doc) {
-    state = migrate(doc);
-    save();
+    notifySuppressed++;
+    try {
+      state = migrate(doc);
+      save();
+    } finally {
+      notifySuppressed--;
+    }
     return state;
   }
 
@@ -799,6 +825,7 @@
     init: init,
     load: load,
     save: save,
+    subscribe: subscribe,
     getItems: getItems,
     getItem: getItem,
     addItem: addItem,

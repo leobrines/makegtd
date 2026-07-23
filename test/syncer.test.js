@@ -79,6 +79,18 @@ test('normalizeConfig accepts both backends at once', function () {
   });
 });
 
+test('normalizeConfig preserves the gdrive client secret and refresh token', function () {
+  var full = pure.normalizeConfig({
+    passphrase: 'p',
+    gdrive: { clientId: 'abc.apps', clientSecret: ' s3cret ', refreshToken: ' rt-123 ' },
+  });
+  assert.deepStrictEqual(full, {
+    passphrase: 'p',
+    gdrive: { clientId: 'abc.apps', clientSecret: 's3cret', refreshToken: 'rt-123' },
+    server: null,
+  });
+});
+
 test('normalizeConfig migrates the earlier single-provider shapes', function () {
   var fromProvider = pure.normalizeConfig({ provider: 'gdrive', passphrase: 'p', gdrive: { clientId: 'abc.apps' } });
   assert.deepStrictEqual(fromProvider, { passphrase: 'p', gdrive: { clientId: 'abc.apps' }, server: null });
