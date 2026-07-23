@@ -10,6 +10,8 @@
  *                         auth round-trip (e.g. OAuth redirect) is underway, or
  *                         {unavailable: true} when auth is missing and opts
  *                         forbids starting an interactive one (background sync).
+ *                         May resolve synchronously or return a Promise (Drive
+ *                         renews its access token from a refresh token here).
  *   list(config, ctx)              -> Promise<[{id, name}]>
  *   download(config, ctx, file)    -> Promise<string>
  *   upload(config, ctx, name, content, existingId) -> Promise
@@ -136,6 +138,11 @@
       // endpoint (Authorization Code + PKCE). Device-local, never synced.
       var clientSecret = String((raw.gdrive && raw.gdrive.clientSecret) || raw.clientSecret || '').trim();
       if (clientSecret) gdrive.clientSecret = clientSecret;
+      // Offline-access refresh token (js/drive.js), obtained after consent so
+      // background sync can renew access tokens across sessions. Device-local,
+      // never synced; encrypted at rest with the rest of the config.
+      var refreshToken = String((raw.gdrive && raw.gdrive.refreshToken) || raw.refreshToken || '').trim();
+      if (refreshToken) gdrive.refreshToken = refreshToken;
     }
     var server = null;
     if (raw.server) {
@@ -347,6 +354,20 @@
     return true;
   }
 
+  // Persists (or clears, with null) the Google Drive offline refresh token,
+  // stored right next to the client id/secret in the device-local config —
+  // encrypted at rest under the vault DEK when a vault is enrolled, exactly like
+  // the other sync secrets. Called by js/drive.js after consent and on renewal.
+  // No-op (returns false) when Drive is not configured.
+  function setGdriveRefreshToken(token) {
+    var config = getConfig();
+    if (!config || !config.gdrive) return false;
+    if (token) config.gdrive.refreshToken = String(token);
+    else delete config.gdrive.refreshToken;
+    writeConfigRaw(config);
+    return true;
+  }
+
   // Removes one backend; removing the last one clears the whole sync setup.
   function removeBackend(provider) {
     var config = getConfig();
@@ -456,12 +477,23 @@
   // {unavailable: true} (background sync, auth not ready); rejects with a coded
   // Error ('auth-expired', 'auth-invalid', 'decrypt-failed', '*-http-*',
   // network failures…). opts.interactive is forwarded to the transport.
+  // ensureAuth may resolve synchronously or return a Promise (Drive renews its
+  // access token via a background request), so normalize it through a Promise.
   function syncBackend(config, provider, opts) {
     var transport = TRANSPORTS[provider]();
-    var auth = transport.ensureAuth(config, opts || {});
-    if (auth.redirecting) return Promise.resolve({ redirecting: true });
-    if (auth.unavailable) return Promise.resolve({ unavailable: true });
-    var ctx = auth.ctx;
+    return Promise.resolve()
+      .then(function () {
+        return transport.ensureAuth(config, opts || {});
+      })
+      .then(function (auth) {
+        if (auth.redirecting) return { redirecting: true };
+        if (auth.unavailable) return { unavailable: true };
+        return runBackendPass(config, provider, transport, auth.ctx);
+      });
+  }
+
+  // The list/download/merge/upload pass, once auth is settled.
+  function runBackendPass(config, provider, transport, ctx) {
     var ownName = deviceFileName(deviceId());
     var ownFileId = null;
     return transport
@@ -622,6 +654,7 @@
     status: status,
     getConfig: getConfig,
     setGdriveConfig: setGdriveConfig,
+    setGdriveRefreshToken: setGdriveRefreshToken,
     setServerConfig: setServerConfig,
     removeBackend: removeBackend,
     disconnect: disconnect,

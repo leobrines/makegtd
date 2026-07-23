@@ -20,6 +20,15 @@
  * Files live in the user's hidden per-app appDataFolder via the Drive REST
  * v3 API (drive.appdata is a non-sensitive scope).
  *
+ * Offline access: the consent request asks for a refresh token (access_type=
+ * offline). Once granted, ensureAuth() mints fresh access tokens silently via
+ * a background POST — so automatic sync keeps working across sessions without
+ * another consent redirect. The refresh token is stored device-local inside the
+ * sync config (js/syncer.js), right next to the client id/secret, and encrypted
+ * at rest under the vault DEK when a device vault is enrolled; it is never part
+ * of the synced document. It only grants offline access to the user's own
+ * appDataFolder (the drive.appdata scope).
+ *
  * Session storage (device-local): 'gtd:gd:token' — current access token
  * (~1 h) — 'gtd:gd:state' — pending OAuth state for the CSRF check — and
  * 'gtd:gd:verifier' — the PKCE code_verifier for the pending exchange.
@@ -60,6 +69,11 @@
       '&state=' + encodeURIComponent(opts.state) +
       '&code_challenge=' + encodeURIComponent(opts.codeChallenge) +
       '&code_challenge_method=S256' +
+      // access_type=offline + prompt=consent make Google return a refresh
+      // token, so background sync can mint fresh access tokens on its own
+      // (across sessions) without another full-page consent redirect.
+      '&access_type=offline' +
+      '&prompt=consent' +
       '&include_granted_scopes=true'
     );
   }
@@ -127,6 +141,26 @@
     var token = readJSON(TOKEN_KEY);
     if (token && token.accessToken && token.expiresAt - TOKEN_MARGIN_MS > Date.now()) return token.accessToken;
     return null;
+  }
+
+  function storeAccessToken(data) {
+    writeJSON(TOKEN_KEY, {
+      accessToken: data.access_token,
+      expiresAt: Date.now() + (Number(data.expires_in) || 3600) * 1000,
+    });
+  }
+
+  // The refresh token lives in the sync config (device-local, vault-encrypted at
+  // rest); syncer.js owns that storage. Guard the calls so unit tests that load
+  // drive.js in isolation (no syncer) do not blow up.
+  function rememberRefreshToken(token) {
+    if (global.GTD.syncer && global.GTD.syncer.setGdriveRefreshToken) {
+      global.GTD.syncer.setGdriveRefreshToken(token);
+    }
+  }
+
+  function forgetRefreshToken() {
+    rememberRefreshToken(null);
   }
 
   function clearSession() {
@@ -223,16 +257,56 @@
     if (!config || !config.gdrive) return Promise.resolve({ error: 'not-configured' });
     return exchangeCode(config, response.code).then(
       function (data) {
-        writeJSON(TOKEN_KEY, {
-          accessToken: data.access_token,
-          expiresAt: Date.now() + (Number(data.expires_in) || 3600) * 1000,
-        });
+        storeAccessToken(data);
+        // Offline access: keep the refresh token so background sync can renew
+        // the access token later without redirecting again.
+        if (data.refresh_token) rememberRefreshToken(data.refresh_token);
         return { ok: true };
       },
       function (err) {
         return { error: (err && err.message) || 'token-exchange-failed' };
       }
     );
+  }
+
+  // Silent token renewal (offline access): trades the stored refresh token for a
+  // fresh access token via a background POST — no user interaction. Stores and
+  // returns the new access token, or rejects. A hard invalid_grant (the refresh
+  // token was revoked or expired) also drops the dead token so we stop retrying
+  // and fall back to an interactive consent on the next manual sync.
+  function refreshAccessToken(config) {
+    var refreshToken = config.gdrive && config.gdrive.refreshToken;
+    if (!refreshToken) return Promise.reject(new Error('no-refresh-token'));
+    var body = {
+      client_id: config.gdrive.clientId,
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token',
+    };
+    if (config.gdrive.clientSecret) body.client_secret = config.gdrive.clientSecret;
+    return global
+      .fetch(TOKEN_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new global.URLSearchParams(body).toString(),
+      })
+      .then(function (response) {
+        return response.json().then(
+          function (data) {
+            if (response.ok && data.access_token) return data;
+            if (data && data.error === 'invalid_grant') forgetRefreshToken();
+            throw new Error('token-refresh-failed');
+          },
+          function () {
+            throw new Error('token-refresh-failed');
+          }
+        );
+      })
+      .then(function (data) {
+        storeAccessToken(data);
+        // Google normally keeps the same refresh token, but honor a rotated one.
+        if (data.refresh_token && data.refresh_token !== refreshToken) rememberRefreshToken(data.refresh_token);
+        return data.access_token;
+      });
   }
 
   // ---- Drive REST (appDataFolder) ----
@@ -253,18 +327,34 @@
   // ---- Transport interface (consumed by js/syncer.js) ----
 
   var transport = {
-    // opts.interactive (default true) governs what happens with no valid token:
-    // a manual sync leaves for Google's consent page, but a background sync
-    // (interactive: false) reports {unavailable: true} and is skipped instead —
-    // the access token lives only in sessionStorage (~1 h, gone once the tab
-    // closes), so re-auth is a full-page redirect that must never fire on its
-    // own; the user re-authorizes on the next manual "Sincronizar ahora".
+    // Returns {ctx} (sync fast path) when a valid access token is cached, or a
+    // Promise for {ctx} | {redirecting: true} | {unavailable: true} otherwise.
+    // With a stored refresh token it renews the access token silently (no
+    // redirect), so both manual and background sync just work across sessions.
+    // Only when no refresh token is available (or it was revoked) does it fall
+    // back: an interactive sync leaves for Google's consent page; a background
+    // sync (opts.interactive === false) reports {unavailable: true} and is
+    // skipped, and the user re-authorizes on the next manual "Sincronizar ahora".
     ensureAuth: function (config, opts) {
       var token = validToken();
       if (token) return { ctx: token };
-      if (opts && opts.interactive === false) return { unavailable: true };
-      connect(config.gdrive.clientId); // Async redirect; the flow resumes at boot.
-      return { redirecting: true };
+      var interactive = !(opts && opts.interactive === false);
+      function fallback() {
+        if (interactive) {
+          connect(config.gdrive.clientId); // Async redirect; the flow resumes at boot.
+          return { redirecting: true };
+        }
+        return { unavailable: true };
+      }
+      if (config.gdrive && config.gdrive.refreshToken) {
+        return refreshAccessToken(config).then(
+          function (freshToken) {
+            return { ctx: freshToken };
+          },
+          fallback // Refresh failed (network, or a revoked/expired token).
+        );
+      }
+      return fallback();
     },
     list: function (config, token) {
       return api(
