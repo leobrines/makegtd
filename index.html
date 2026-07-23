@@ -216,6 +216,53 @@
       </div>
     </div>
 
+    <!-- Recovery-code dialog: shows the device-vault recovery code so it can be
+         selected and copied (a native alert() can't be copied on mobile). -->
+    <div id="recovery-code-overlay" class="fixed inset-0 z-50 hidden overflow-y-auto bg-stone-900/40 dark:bg-black/60" aria-hidden="true">
+      <div class="max-w-lg mx-auto mt-[14vh] px-4 pb-8">
+        <div
+          class="relative bg-white dark:bg-stone-900 rounded-2xl p-5 border border-stone-200 dark:border-stone-700"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="recovery-code-title"
+        >
+          <button
+            id="recovery-code-close"
+            type="button"
+            aria-label="Cerrar"
+            class="absolute top-1 right-1 w-11 h-11 flex items-center justify-center text-2xl leading-none text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300 transition-colors duration-150"
+          >&times;</button>
+          <h2 id="recovery-code-title" class="font-semibold text-lg tracking-tight mb-2">Protección activada 🔒</h2>
+          <p id="recovery-code-desc" class="text-sm text-stone-500 dark:text-stone-400 mb-4">
+            Este es tu <strong>código de recuperación</strong>. Guárdalo ahora en tu gestor
+            de contraseñas: es la única forma de recuperar tus datos si pierdes la biometría.
+          </p>
+          <label for="recovery-code-value" class="sr-only">Código de recuperación</label>
+          <input
+            id="recovery-code-value"
+            type="text"
+            readonly
+            spellcheck="false"
+            autocomplete="off"
+            autocapitalize="off"
+            class="w-full select-all text-center font-mono text-lg tracking-wider px-3 py-3 mb-3 rounded-xl bg-stone-100 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-800 dark:text-stone-100"
+          />
+          <div class="flex items-center justify-end gap-2">
+            <button
+              id="recovery-code-copy"
+              type="button"
+              class="min-h-[44px] px-5 rounded-xl border border-stone-300 dark:border-stone-600 font-medium text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors duration-150"
+            >Copiar</button>
+            <button
+              id="recovery-code-ok"
+              type="button"
+              class="min-h-[44px] px-5 rounded-xl bg-accent text-white font-medium hover:bg-accent-dark transition-colors duration-150"
+            >Entendido</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Help popup: what belongs in the inbox (opened from the capture overlay and the Inbox view).
          Definition per the official GTD Setup Guide, p. 5 ("Notes/In") and p. 2 ("Capture"). -->
     <div id="capture-help-overlay" class="fixed inset-0 z-50 hidden bg-stone-900/40 dark:bg-black/60" aria-hidden="true">

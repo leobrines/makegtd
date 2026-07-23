@@ -42,6 +42,23 @@
     global.GTD.app.toast(message);
   }
 
+  // Shows the device-vault recovery code in a copyable dialog. A native alert()
+  // renders text that can't be selected or copied on mobile, so the code is put
+  // in a read-only field with a "Copiar" button. `opts.title`/`opts.desc` (HTML)
+  // override the default enrolment wording (e.g. when changing the code).
+  function showRecoveryCode(code, opts) {
+    opts = opts || {};
+    var $overlay = $('#recovery-code-overlay');
+    if (opts.title) $('#recovery-code-title').text(opts.title);
+    if (opts.desc) $('#recovery-code-desc').html(opts.desc);
+    $('#recovery-code-value').val(code);
+    $overlay.removeClass('hidden').attr('aria-hidden', 'false');
+  }
+
+  function closeRecoveryCode() {
+    $('#recovery-code-overlay').addClass('hidden').attr('aria-hidden', 'true');
+  }
+
   // ---- Shared building blocks ----
 
   function header(title, subtitle) {
@@ -1790,6 +1807,53 @@
       if (e.key === 'Escape') closeContextHelp();
     });
 
+    // Recovery-code dialog: copy button + close handlers.
+    $('#recovery-code-overlay').on('click', function (e) {
+      if (e.target === this) closeRecoveryCode();
+    });
+
+    $('#recovery-code-close, #recovery-code-ok').on('click', closeRecoveryCode);
+
+    $('#recovery-code-copy').on('click', function () {
+      var $btn = $(this);
+      var $field = $('#recovery-code-value');
+      var code = $field.val();
+
+      function done() {
+        var original = $btn.data('label') || $btn.text();
+        $btn.data('label', original).text('Copiado ✓');
+        global.setTimeout(function () {
+          $btn.text($btn.data('label'));
+        }, 1500);
+      }
+
+      // Select the text so it stays visible/selected even if copying fails,
+      // then try the async Clipboard API with an execCommand fallback.
+      $field.trigger('focus');
+      $field[0].setSelectionRange(0, code.length);
+      if (global.navigator.clipboard && global.navigator.clipboard.writeText) {
+        global.navigator.clipboard.writeText(code).then(done, function () {
+          try {
+            global.document.execCommand('copy');
+            done();
+          } catch (err) {
+            toast('Copia el código manualmente');
+          }
+        });
+      } else {
+        try {
+          global.document.execCommand('copy');
+          done();
+        } catch (err) {
+          toast('Copia el código manualmente');
+        }
+      }
+    });
+
+    $(document).on('keydown', function (e) {
+      if (e.key === 'Escape') closeRecoveryCode();
+    });
+
     // Horizons (2-5): add, expand, save, delete.
     $view.on('submit', '.horizon-form', function (e) {
       e.preventDefault();
@@ -2137,12 +2201,9 @@
             });
         })
         .then(function (res) {
-          global.alert(
-            'PROTECCIÓN ACTIVADA\n\nTu código de recuperación es:\n\n' +
-              code +
-              '\n\nGuárdalo ahora en tu gestor de contraseñas. Es la única forma de ' +
-              'recuperar tus datos si pierdes la biometría.'
-          );
+          showRecoveryCode(code, {
+            title: res.biometric ? 'Protección activada con biometría 🔒' : 'Protección activada 🔒',
+          });
           toast(res.biometric ? 'Protección activada con biometría 🔒' : 'Protección activada 🔒');
           refresh();
         })
@@ -2172,7 +2233,12 @@
       global.GTD.vault
         .changeRecovery(current, next)
         .then(function () {
-          global.alert('NUEVO código de recuperación:\n\n' + next + '\n\nGuárdalo; el anterior ya no sirve.');
+          showRecoveryCode(next, {
+            title: 'Nuevo código de recuperación',
+            desc:
+              'Este es tu <strong>nuevo código de recuperación</strong>. Guárdalo ahora; ' +
+              'el anterior ya no sirve.',
+          });
           toast('Código actualizado');
         })
         .catch(function (err) {
