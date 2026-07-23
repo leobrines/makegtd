@@ -253,9 +253,16 @@
   // ---- Transport interface (consumed by js/syncer.js) ----
 
   var transport = {
-    ensureAuth: function (config) {
+    // opts.interactive (default true) governs what happens with no valid token:
+    // a manual sync leaves for Google's consent page, but a background sync
+    // (interactive: false) reports {unavailable: true} and is skipped instead —
+    // the access token lives only in sessionStorage (~1 h, gone once the tab
+    // closes), so re-auth is a full-page redirect that must never fire on its
+    // own; the user re-authorizes on the next manual "Sincronizar ahora".
+    ensureAuth: function (config, opts) {
       var token = validToken();
       if (token) return { ctx: token };
+      if (opts && opts.interactive === false) return { unavailable: true };
       connect(config.gdrive.clientId); // Async redirect; the flow resumes at boot.
       return { redirecting: true };
     },

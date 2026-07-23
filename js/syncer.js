@@ -6,19 +6,25 @@
  * the same encrypted per-device files and none is authoritative, so the
  * deterministic merge (js/sync.js) converges no matter how many take part.
  * A transport implements:
- *   ensureAuth(config) -> {ctx} when ready, or {redirecting: true} when an
- *                         auth round-trip (e.g. OAuth redirect) is underway
+ *   ensureAuth(config, opts) -> {ctx} when ready, {redirecting: true} when an
+ *                         auth round-trip (e.g. OAuth redirect) is underway, or
+ *                         {unavailable: true} when auth is missing and opts
+ *                         forbids starting an interactive one (background sync).
  *   list(config, ctx)              -> Promise<[{id, name}]>
  *   download(config, ctx, file)    -> Promise<string>
  *   upload(config, ctx, name, content, existingId) -> Promise
  * Registered transports: 'gdrive' (js/drive.js) and 'server' (js/server.js).
  *
- * sync() runs the backends sequentially — server first, then Google Drive,
- * because Drive may leave the page for an OAuth redirect and everything
- * before it must have finished. The local state is re-merged after each
- * backend, so a device connected to both acts as a bridge between devices
- * that only use one of them. Per-backend failures do not stop the others;
- * the result carries one entry per backend.
+ * sync({interactive}) runs the backends sequentially — server first, then
+ * Google Drive, because Drive may leave the page for an OAuth redirect and
+ * everything before it must have finished. A background sync passes
+ * interactive: false so an expired Drive token is skipped (never redirects);
+ * a manual sync (the default) may leave the page to re-authorize. The local
+ * state is re-merged after each backend, so a device connected to both acts as
+ * a bridge between devices that only use one of them. Per-backend failures do
+ * not stop the others; the result carries one entry per backend, and a
+ * top-level `changed` flag reports whether any remote data was merged in (so
+ * the UI only re-renders when something actually arrived).
  *
  * One encrypted file per device (gtd-device-<id>.json) so writes never
  * conflict; every pass downloads the other devices' files, decrypts
@@ -433,15 +439,28 @@
     },
   };
 
+  // Content fingerprint that ignores savedAt (bumped on every save) so we can
+  // tell whether a merge actually changed the local data or just re-timestamped
+  // an identical document.
+  function contentSignature(doc) {
+    var copy = {};
+    Object.keys(doc).forEach(function (key) {
+      if (key !== 'savedAt') copy[key] = doc[key];
+    });
+    return JSON.stringify(copy);
+  }
+
   // One full pass against one backend: list, download+decrypt the other
   // devices' files, merge into the local state, re-upload this device's
-  // file. Resolves {devices: n} or {redirecting: true}; rejects with a coded
+  // file. Resolves {devices: n, changed}, {redirecting: true} or
+  // {unavailable: true} (background sync, auth not ready); rejects with a coded
   // Error ('auth-expired', 'auth-invalid', 'decrypt-failed', '*-http-*',
-  // network failures…).
-  function syncBackend(config, provider) {
+  // network failures…). opts.interactive is forwarded to the transport.
+  function syncBackend(config, provider, opts) {
     var transport = TRANSPORTS[provider]();
-    var auth = transport.ensureAuth(config);
+    var auth = transport.ensureAuth(config, opts || {});
     if (auth.redirecting) return Promise.resolve({ redirecting: true });
+    if (auth.unavailable) return Promise.resolve({ unavailable: true });
     var ctx = auth.ctx;
     var ownName = deviceFileName(deviceId());
     var ownFileId = null;
@@ -483,9 +502,12 @@
         var remoteDocs = fresh.map(function (e) {
           return e.doc;
         });
+        var changed = false;
         if (remoteDocs.length) {
+          var before = contentSignature(global.GTD.store.load());
           var merged = global.GTD.sync.merge([global.GTD.store.load()].concat(remoteDocs));
           global.GTD.store.replaceState(merged);
+          changed = contentSignature(global.GTD.store.load()) !== before;
         }
         if (fresh.length) {
           fresh.forEach(function (e) {
@@ -503,29 +525,33 @@
             var last = readLastSyncMap();
             last[provider] = new Date().toISOString();
             writeJSON(LAST_SYNC_KEY, last);
-            return { devices: remoteDocs.length + 1 };
+            return { devices: remoteDocs.length + 1, changed: changed };
           });
       });
   }
 
   // Syncs every active backend sequentially — server first, Google Drive
   // last (it may leave the page for an OAuth redirect). A failing backend
-  // does not stop the others. Resolves {redirecting: true} or
-  // {ok: <all succeeded>, results: [{provider, ok, devices|error}]};
+  // does not stop the others. opts.interactive (default true) allows the
+  // OAuth redirect; a background sync passes false so a backend whose auth is
+  // not ready is skipped ({skipped: true}) rather than redirecting. Resolves
+  // {redirecting: true} or
+  // {ok, changed, results: [{provider, ok, devices, changed | error | skipped}]};
   // rejects only when sync is not configured at all.
-  function sync() {
+  function sync(opts) {
     var config = getConfig();
     if (!config) return Promise.reject(new Error('not-configured'));
+    var interactive = !(opts && opts.interactive === false);
     // The gdrive backend may leave the page for an OAuth redirect. With a vault
     // the config is written asynchronously; make sure that write has reached
     // disk before any redirect, or the config is lost and the return trip fails
     // with 'not-configured' ("No se pudo conectar con Google").
     return whenConfigPersisted().then(function () {
-      return runBackends(config);
+      return runBackends(config, interactive);
     });
   }
 
-  function runBackends(config) {
+  function runBackends(config, interactive) {
     var providers = [];
     if (config.server) providers.push('server');
     if (config.gdrive) providers.push('gdrive');
@@ -535,13 +561,17 @@
       .reduce(function (chain, provider) {
         return chain.then(function () {
           if (redirecting) return;
-          return syncBackend(config, provider).then(
+          return syncBackend(config, provider, { interactive: interactive }).then(
             function (result) {
               if (result.redirecting) {
                 redirecting = true;
                 return;
               }
-              results.push({ provider: provider, ok: true, devices: result.devices });
+              if (result.unavailable) {
+                results.push({ provider: provider, skipped: true });
+                return;
+              }
+              results.push({ provider: provider, ok: true, devices: result.devices, changed: !!result.changed });
             },
             function (err) {
               results.push({ provider: provider, ok: false, error: err });
@@ -552,8 +582,13 @@
       .then(function () {
         if (redirecting) return { redirecting: true, results: results };
         return {
+          // A skipped backend is neither success nor failure: it does not make
+          // ok false (nothing went wrong), but does not count toward it either.
           ok: results.every(function (r) {
-            return r.ok;
+            return r.skipped || r.ok;
+          }),
+          changed: results.some(function (r) {
+            return r.changed;
           }),
           results: results,
         };

@@ -454,6 +454,86 @@
     });
   }
 
+  // ---- Auto-sync (local-first: push local edits, pull remote changes) ----
+  //
+  // The sync engine was manual-only (a "Sincronizar ahora" button). This wires
+  // it to run on its own so a change on one device reaches the others without
+  // anyone opening Settings:
+  //   - push:  a debounced sync a few seconds after every local mutation.
+  //   - pull:  a sync when the tab/app regains focus, plus a gentle interval
+  //            while it stays visible, plus one at boot.
+  // Every automatic sync is non-interactive (interactive: false): it never
+  // triggers Google's OAuth redirect. The self-hosted server backend always
+  // syncs; Google Drive syncs only while its access token is still valid
+  // (sessionStorage, ~1 h) — once it expires the backend is silently skipped
+  // and the user re-authorizes on the next manual "Sincronizar ahora".
+  var AUTOSYNC_DEBOUNCE_MS = 8000; // Coalesce a burst of edits into one push.
+  var AUTOSYNC_POLL_MS = 90000; // Pull cadence while the tab is visible.
+  var autosyncDebounceTimer = null;
+  var autosyncInFlight = false;
+
+  function autosyncConfigured() {
+    return !!global.GTD.syncer.getConfig();
+  }
+
+  // Never sync out from under an active edit: replacing the state or
+  // re-rendering the view would discard half-typed input or collapse an open
+  // editor/dialog. Defer instead.
+  function userBusy() {
+    if (global.GTD.views.isBusy && global.GTD.views.isBusy()) return true;
+    var el = global.document.activeElement;
+    if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return true;
+    return false;
+  }
+
+  function scheduleAutoSync() {
+    if (!autosyncConfigured()) return;
+    if (autosyncDebounceTimer) clearTimeout(autosyncDebounceTimer);
+    autosyncDebounceTimer = setTimeout(function () {
+      autosyncDebounceTimer = null;
+      runAutoSync();
+    }, AUTOSYNC_DEBOUNCE_MS);
+  }
+
+  function runAutoSync() {
+    if (!autosyncConfigured()) return;
+    // Busy or a sync already running: try again shortly rather than drop it.
+    if (autosyncInFlight || userBusy()) {
+      scheduleAutoSync();
+      return;
+    }
+    autosyncInFlight = true;
+    global.GTD.syncer
+      .sync({ interactive: false })
+      .then(function (result) {
+        autosyncInFlight = false;
+        // Only re-render when remote data actually merged in, and never over an
+        // edit the user may have started while the sync was in flight.
+        if (result && !result.redirecting && result.changed && !userBusy()) refresh();
+      })
+      .catch(function () {
+        autosyncInFlight = false;
+      });
+  }
+
+  function initAutoSync(skipInitialSync) {
+    // Push shortly after each local mutation (sync-driven merges are excluded
+    // by the store; see store.subscribe / replaceState).
+    global.GTD.store.subscribe(scheduleAutoSync);
+    // Pull when the tab becomes visible again (returning to the PWA/tab).
+    global.document.addEventListener('visibilitychange', function () {
+      if (global.document.visibilityState === 'visible') runAutoSync();
+    });
+    $(global).on('focus', runAutoSync);
+    // Pull on a gentle interval while the tab stays open and visible.
+    setInterval(function () {
+      if (global.document.visibilityState === 'visible') runAutoSync();
+    }, AUTOSYNC_POLL_MS);
+    // Pull once now to catch anything changed elsewhere while this device was
+    // closed — unless a boot OAuth return already kicked a sync.
+    if (!skipInitialSync) runAutoSync();
+  }
+
   // ---- Boot ----
 
   $(function () {
@@ -512,7 +592,7 @@
                 toast('Sincronizado ✅');
               } else {
                 var failed = result.results.filter(function (r) {
-                  return !r.ok;
+                  return !r.skipped && !r.ok;
                 })[0];
                 toast(views.syncBackendLabel(failed.provider) + ': ' + views.syncErrorMessage(failed.error));
               }
@@ -525,6 +605,10 @@
           toast('No se pudo conectar con Google');
         }
       }
+
+      // Start automatic background sync. Skip its initial pull when a boot
+      // OAuth return already triggered a (manual, interactive) sync above.
+      initAutoSync(!!(auth && auth.ok));
     });
   });
 

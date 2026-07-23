@@ -2493,7 +2493,7 @@
           toast('Sincronizado ✅');
         } else {
           var failed = result.results.filter(function (r) {
-            return !r.ok;
+            return !r.skipped && !r.ok;
           })[0];
           toast(syncBackendLabel(failed.provider) + ': ' + syncErrorMessage(failed.error));
         }
@@ -2581,6 +2581,17 @@
       closeHorizonEditor();
       closeSortMenu();
       closeChooser();
+    },
+    // True while the user has an inline editor or a dialog open. Auto-sync uses
+    // it to avoid re-rendering the view (which would collapse the editor or
+    // discard half-typed input) out from under an active edit.
+    isBusy: function () {
+      return (
+        expandedItemId !== null ||
+        editingHorizonId !== null ||
+        sortMenuFor !== null ||
+        chooserOnPick !== null
+      );
     },
   };
 })(window, jQuery);
